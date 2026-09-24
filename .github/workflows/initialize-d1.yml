@@ -1,4 +1,4 @@
-name: Initialize Lotus POS D1
+name: Finish Lotus POS D1 migration 0005
 
 on:
   workflow_dispatch:
@@ -29,10 +29,8 @@ jobs:
         run: test -n "$CLOUDFLARE_API_TOKEN"
       - name: Install Wrangler
         run: npm install --no-audit --no-fund
-      - name: List unapplied migrations on the configured remote D1
-        run: npx wrangler d1 migrations list pos_unified --remote
-      - name: Apply all unapplied migrations on the configured remote D1
-        run: npx wrangler d1 migrations apply pos_unified --remote
+      - name: Verify the existing four migrations and import 0005 safely
+        run: node scripts/finish-d1-0005.mjs
       - name: Confirm there are no unapplied migrations
         run: npx wrangler d1 migrations list pos_unified --remote
       - name: Print migration history
