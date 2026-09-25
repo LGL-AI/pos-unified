@@ -13,9 +13,9 @@
     { "binding": "DB", "database_name": "pos_unified", "database_id": "4a07644e-6038-4482-a90f-e55c6c2ebd8d", "migrations_dir": "migrations" }
   ],
   "vars": {
-    "ORDERING_ENABLED": "true",
-    "BANK_BIN": "970448",
-    "BANK_ACCOUNT_NUMBER": "609271",
-    "BANK_ACCOUNT_NAME": "HUANG TIANSHENG"
+    "ORDERING_ENABLED": "true"
+  },
+  "secrets": {
+    "required": ["SESSION_SECRET", "POS_STAFF_PASSWORD"]
   }
 }

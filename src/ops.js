@@ -2,7 +2,7 @@
 const H={'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
 const ok=(data,status=200)=>new Response(JSON.stringify({ok:true,...data}),{status,headers:H});
 const bad=(status,code,message)=>new Response(JSON.stringify({ok:false,code,message}),{status,headers:H});
-const VALID=['ORDER_VIEW','ORDER_EDIT','PAYMENT_CONFIRM','PRINT_KITCHEN','INVENTORY_VIEW','INVENTORY_MANAGE','REFUND_VIEW','REFUND_CREATE','STAFF_MANAGE','ROLE_MANAGE'];
+const VALID=['ORDER_VIEW','ORDER_EDIT','PAYMENT_CONFIRM','PRINT_KITCHEN','INVENTORY_VIEW','INVENTORY_MANAGE','REFUND_VIEW','REFUND_CREATE','STAFF_MANAGE','ROLE_MANAGE','SHIFT_MANAGE','ATTENDANCE_VIEW','CATALOG_MANAGE','VOUCHER_MANAGE'];
 const uuid=x=>typeof x==='string'&&/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(x);
 const clean=(v,n=100)=>typeof v==='string'?v.trim().slice(0,n):'';
 const integer=n=>Number.isSafeInteger(n)&&n>0&&n<=100000000;
@@ -37,12 +37,13 @@ export async function loginActor(env,username,password,deps){
 }
 
 export async function catalogInventory(env,base){
+ const {results:products=[]}=await env.DB.prepare('SELECT * FROM pos_products ORDER BY id').all();
  const {results=[]}=await env.DB.prepare(`SELECT p.product_id,p.stock,p.min_stock,
   COALESCE(MIN(CASE WHEN i.stock>=r.qty THEN 1 ELSE 0 END),1) AS ingredients_ok
   FROM pos_product_inventory p LEFT JOIN pos_recipes r ON r.product_id=p.product_id
   LEFT JOIN pos_ingredients i ON i.id=r.ingredient_id GROUP BY p.product_id`).all();
  const byId=new Map(results.map(x=>[x.product_id,x]));
- return {...base,products:base.products.map(p=>{const q=byId.get(String(p.id));return {...p,available:!!(p.active&&q?.stock>0&&q.ingredients_ok),stock:q?.stock??0,lowStock:!!q&&q.stock<=q.min_stock}})};
+ return {...base,products:products.map(row=>{const q=byId.get(row.id);return {id:row.id,sku:row.sku,name:row.name,nameCn:row.name_cn,category:row.category,station:row.station,price:row.price,largePrice:row.large_price,active:!!row.active,icon:row.icon,size:!!row.size,spicy:!!row.spicy,version:row.version,available:!!(row.active&&q?.stock>0&&q.ingredients_ok),stock:q?.stock??0,lowStock:!!q&&q.stock<=q.min_stock}})};
 }
 
 function permissionList(value){if(!Array.isArray(value)||value.length>VALID.length||value.some(x=>!VALID.includes(x))||new Set(value).size!==value.length)throw Error('INVALID_PERMISSIONS');return value}
@@ -101,7 +102,7 @@ export async function handleOps(req,env,actor,deps){
     reason=clean(b.reason,200),idem=b.idempotencyKey,method=b.method,restock=Array.isArray(b.restockItems)?b.restockItems:[];
    if(!uuid(orderId)||(billId!==null&&!/^[0-9a-f-]{36}:[1-9][0-9]*$/i.test(billId))||!integer(b.amount)||!reason||!['CASH','BANK'].includes(method)||typeof idem!=='string'||!/^[A-Za-z0-9_-]{16,100}$/.test(idem)||restock.length>13)throw Error('INVALID_REFUND');
    if(restock.length&&(!allowed(actor,'INVENTORY_MANAGE')||b.confirmRestock!==true))return deny();
-   if(restock.some(x=>!x||!integer(x.quantity)||!/^10[1-9]$|^11[0-3]$/.test(String(x.productId)))||new Set(restock.map(x=>String(x.productId))).size!==restock.length)throw Error('INVALID_REFUND');
+   if(restock.some(x=>!x||!integer(x.quantity)||!/^[A-Za-z0-9_-]{1,24}$/.test(String(x.productId)))||new Set(restock.map(x=>String(x.productId))).size!==restock.length)throw Error('INVALID_REFUND');
    const normalized=restock.map(x=>({productId:String(x.productId),quantity:x.quantity})).sort((a,b)=>a.productId.localeCompare(b.productId));
    const fingerprint=await deps.sha(JSON.stringify({orderId,billId,amount:b.amount,reason,method,restock:normalized}));
    const prior=await env.DB.prepare('SELECT * FROM pos_refunds WHERE idem_key=?').bind(idem).first();

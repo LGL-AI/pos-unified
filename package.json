@@ -1,9 +1,9 @@
 {
   "name": "lotus-pos-cloud-d1",
-  "version": "2.1.1",
+  "version": "2.5.0",
   "private": true,
   "type": "module",
-  "description": "Unified customer QR and SUNMI staff POS on Cloudflare Worker and D1",
+  "description": "Four Lotus POS UIs sharing one Cloudflare Worker and D1",
   "scripts": {
     "dev": "wrangler dev",
     "db:local": "wrangler d1 migrations apply DB --local",
