@@ -1,0 +1,48 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {DatabaseSync} from 'node:sqlite';
+import vm from 'node:vm';
+import worker from '../src/worker.js';
+
+test('desktop counter buttons pair the second screen and publish priced cart through D1',async()=>{
+ const db=new DatabaseSync(':memory:');for(const n of ['0001_initial.sql','0002_customer_members_vouchers.sql','0003_pos_cloud.sql','0004_loyalty_points.sql','0005_inventory_refunds_roles.sql','0006_counter_display.sql','0007_counter_management.sql','0008_store_config.sql'])db.exec(readFileSync(new URL('../migrations/'+n,import.meta.url),'utf8'));
+ db.exec('UPDATE pos_product_inventory SET stock=100; UPDATE pos_ingredients SET stock=100000;');
+ const DB={prepare(sql){let a=[];return{bind(...v){a=v;return this},async first(){return db.prepare(sql).get(...a)||null},async all(){return{results:db.prepare(sql).all(...a)}},async run(){return{meta:{changes:db.prepare(sql).run(...a).changes}}},_run(){return db.prepare(sql).run(...a)}}},async batch(queries){db.exec('BEGIN');try{const r=queries.map(x=>x._run());db.exec('COMMIT');return r}catch(e){db.exec('ROLLBACK');throw e}}};
+ const env={DB,ORDERING_ENABLED:'true',SESSION_SECRET:'ui-test-secret-aabbccddeeff00112233',POS_STAFF_PASSWORD:'counter-test-password',BANK_BIN:'970448',BANK_ACCOUNT_NUMBER:'609271',BANK_ACCOUNT_NAME:'HUANG TIANSHENG'};
+ const app={innerHTML:''},connection={textContent:'',classList:{toggle(){}}},listeners={};let printNode=null,printed=0,exported=null;const devices=[];
+ const reportDay=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Ho_Chi_Minh',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+ const document={body:{dataset:{mode:'counter'},appendChild(node){if(node.id!=='download')printNode=node}},querySelector(s){return s==='#app'?app:s==='#connection'?connection:s==='#lotus-print-ticket'?printNode:s==='#report-day'?{value:reportDay}:null},createElement(tag){return tag==='a'?{id:'download',click(){},remove(){}}:{id:'',innerHTML:'',remove(){printNode=null}}},addEventListener(type,fn){listeners[type]=fn}};
+ class BrowserURL extends URL{static createObjectURL(blob){exported=blob;return 'blob:report'}static revokeObjectURL(){}}
+ const storage=new Map(),session=new Map(),context={document,location:{origin:'https://pos.test'},sessionStorage:{getItem:k=>session.get(k)||null,setItem:(k,v)=>session.set(k,v),removeItem:k=>session.delete(k)},localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},crypto,Response,Request,URL:BrowserURL,Blob,Intl,JSON,Number,Array,String,Math,Date,console,AbortSignal,clearTimeout,setTimeout:(fn,ms)=>ms>=30000?undefined:setTimeout(fn,ms),navigator:{},confirm:()=>true,prompt:(_,v)=>v??'',fetch:async(path,opts={})=>worker.fetch(new Request('https://pos.test'+path,{method:opts.method||'GET',headers:{Origin:'https://pos.test',...opts.headers},body:opts.body}),env)};
+ context.window=context;context.print=()=>{printed++};context.LotusCounterDevices={send:async(job)=>{devices.push(job);return{ok:true,state:'SENT'}},receipt:()=>({width:8,height:8,bitmap:'AAAAAAAAAAA='}),labels:()=>[{width:8,height:8,bitmap:'AAAAAAAAAAA='}],status:async()=>({labelWidth:50,labelHeight:30}),token:()=>''};vm.createContext(context);vm.runInContext(readFileSync(new URL('../public/staff/qrcode.js',import.meta.url),'utf8'),context);vm.runInContext(readFileSync(new URL('../public/staff/staff.js',import.meta.url),'utf8'),context);
+ const click=async dataset=>listeners.click({target:{closest:()=>({dataset,disabled:false})}});
+ await new Promise(r=>setTimeout(r,10));assert.match(app.innerHTML,/Đăng nhập Lotus POS Cloud/);
+ await listeners.submit({target:{id:'login',password:{value:env.POS_STAFF_PASSWORD}},preventDefault(){}});
+ assert.match(app.innerHTML,/Màn hình thứ hai/);
+ assert.match(app.innerHTML,/Giỏ món/);
+ await click({screen:'display'});assert.match(app.innerHTML,/Ghép màn hình/);
+ await click({action:'display-pair'});assert.match(app.innerHTML,/Sao chép liên kết/);
+ const pairing=db.prepare('SELECT id,token_hash FROM pos_display_sessions').get();assert.ok(pairing?.id);assert.ok(pairing.token_hash);
+ await click({screen:'new'});await click({add:'101'});
+ await new Promise(r=>setTimeout(r,560));
+ const snapshot=JSON.parse(db.prepare('SELECT snapshot_json FROM pos_display_sessions WHERE id=?').get(pairing.id).snapshot_json);
+ assert.equal(snapshot.table,'T01');assert.equal(snapshot.total,130000);assert.equal(snapshot.items[0].qty,1);
+ await click({screen:'license'});assert.match(app.innerHTML,/CHỈ MÔ PHỎNG/);
+ await click({action:'license-grace'});assert.match(app.innerHTML,/GRACE/);
+ await click({action:'license-suspended'});assert.match(app.innerHTML,/SUSPENDED/);
+ await click({screen:'dashboard'});assert.match(app.innerHTML,/Báo cáo ngày/);
+ await click({screen:'new'});await click({action:'submit'});
+ const order=db.prepare('SELECT id,total FROM qr_orders ORDER BY created_at DESC LIMIT 1').get();assert.ok(order);
+ await click({pay:order.id,method:'CASH'});assert.deepEqual(devices.map(x=>x.type),['DRAWER','RECEIPT']);assert.equal(printed,0);assert.equal(db.prepare('SELECT payment_status FROM qr_orders WHERE id=?').get(order.id).payment_status,'PAID');
+ await new Promise(r=>setTimeout(r,560));const afterPay=JSON.parse(db.prepare('SELECT snapshot_json FROM pos_display_sessions WHERE id=?').get(pairing.id).snapshot_json);assert.equal(afterPay.paymentStatus,'PAID');assert.equal(afterPay.bankPayment,null);
+ const job=db.prepare('SELECT id FROM pos_kitchen_jobs WHERE order_id=? LIMIT 1').get(order.id);assert.ok(job);
+ await click({printLabel:job.id});assert.deepEqual(devices.map(x=>x.type),['DRAWER','RECEIPT','LABEL']);assert.equal(devices[2].jobId,job.id);assert.equal(db.prepare('SELECT status FROM pos_kitchen_jobs WHERE id=?').get(job.id).status,'PENDING');
+ await click({printJob:job.id});assert.equal(printed,1,app.innerHTML.slice(0,1200));assert.match(printNode.innerHTML,/PHIẾU BẾP/);assert.equal(db.prepare('SELECT status FROM pos_kitchen_jobs WHERE id=?').get(job.id).status,'UNKNOWN');
+ await click({screen:'new'});await click({add:'101'});await click({action:'submit'});const bank=db.prepare('SELECT id FROM qr_orders ORDER BY created_at DESC LIMIT 1').get();assert.ok(bank.id!==order.id);
+ await click({pay:bank.id,method:'BANK'});assert.equal(db.prepare('SELECT payment_method FROM qr_orders WHERE id=?').get(bank.id).payment_method,'BANK');assert.deepEqual(devices.map(x=>x.type),['DRAWER','RECEIPT','LABEL','RECEIPT']);
+ db.prepare('INSERT INTO pos_refunds(id,idem_key,fingerprint,order_id,amount,reason,method,actor_id,created_at) VALUES(?,?,?,?,?,?,?,?,?)').run('csv-test-refund','csv-refund-idempotency','csv-refund',order.id,1000,'Thối tiền','CASH','test',reportDay+'T02:00:00.000Z');
+ await click({screen:'dashboard'});await click({action:'report-load'});await click({action:'report-download'});
+ assert.ok(exported);assert.match(await exported.text(),/,-1000,/);
+ db.close();
+});

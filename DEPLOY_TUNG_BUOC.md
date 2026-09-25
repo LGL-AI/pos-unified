@@ -1,45 +1,34 @@
-# Lotus POS 2.1.1: cài bằng GitHub Web và Cloudflare Web
+# Đưa Lotus POS 2.5.0 lên bằng GitHub Web và Cloudflare Web
 
-Không cần PowerShell. Repo: [`LGL-AI/pos-unified`](https://github.com/LGL-AI/pos-unified); Worker: `pos-unified`; D1: `pos_unified`, ID `4a07644e-6038-4482-a90f-e55c6c2ebd8d`; website: <https://pos-unified.lgl247-ai.workers.dev>.
+Bạn chỉ cần trình duyệt. Repo: [LGL-AI/pos-unified](https://github.com/LGL-AI/pos-unified), nhánh `main`; Worker: `pos-unified`, địa chỉ [pos-unified.lgl247-ai.workers.dev](https://pos-unified.lgl247-ai.workers.dev/); D1: `pos_unified`, ID `4a07644e-6038-4482-a90f-e55c6c2ebd8d`. **Giải nén các ZIP rồi đưa các thư mục/tệp lên GitHub, không tải nguyên ZIP lên repo.** Cấu trúc thư mục phải giữ đúng như trong ZIP.
 
-Ngày 24/09/2026, sau lỗi `incomplete input` khi dán SQL gộp, câu SELECT kiểm tra lại cho kết quả **không có bảng hoặc trigger ứng dụng**. Có thể cài cả năm migration qua nút chạy thủ công GitHub Actions. **Không dán lại tệp SQL gộp vào D1 Console.** Nếu trong lúc làm database xuất hiện bảng ứng dụng trước bước chạy Actions, gửi ảnh để kiểm tra trước khi bấm chạy.
+## A. Nâng D1, trước khi đưa code 2.5.0 lên
 
-## Bước 1 — Đưa bản mã nguồn mới lên GitHub
+1. Vào Cloudflare → **Storage & databases → D1 SQL Database → pos_unified → Console**, dán `SELECT name FROM d1_migrations ORDER BY id;`, bấm **Execute**. Giữ tab này để kiểm lại. Bạn có 5, 6, 7 hay 8 dòng đều có thể làm tiếp; **không xóa bảng, không tạo D1 mới**.
+2. Tải và giải nén `LotusPOS_v2.5.0_01_D1_GitHub_Web.zip`. Trên GitHub vào repo → **Code** → `main` → **Add file → Upload files**. Kéo `migrations`, `scripts`, `.github` trong ZIP vào đúng các thư mục tương ứng của repo rồi **Commit changes**. Bạn cũng có thể vào từng thư mục trên GitHub để tải từng tệp lên. Nếu GitHub yêu cầu xử lý tệp đã có, mở tệp cũ → bấm bút chì → thay nội dung theo tệp trong ZIP → **Commit changes**. Không để tệp SQL hoặc workflow ở gốc repo.
+3. Nếu Console mới có **5 hoặc 6** dòng: [GitHub → Actions](https://github.com/LGL-AI/pos-unified/actions) → chọn **Upgrade Lotus POS D1 0006 and 0007** → **Run workflow** → nhánh `main` → **Run workflow**. Chờ dấu xanh. Nếu đã có **7 hoặc 8** dòng, bỏ qua bước này.
+4. Nếu Console mới có **tối đa 7** dòng: Actions → **Upgrade Lotus POS D1 0008 - Store config and taxes** → **Run workflow** → `main` → **Run workflow**, chờ dấu xanh. Workflow dùng repository secret `CLOUDFLARE_D1_API_TOKEN` đã dùng cho 0005. Nếu đã có 8 dòng với dòng cuối `0008_store_config.sql`, vẫn có thể chạy lại workflow 0008 để đối chiếu, nó không nhập dữ liệu lần thứ hai.
+5. Quay lại D1 Console, chạy `SELECT name FROM d1_migrations ORDER BY id;`. Kết quả phải có **8 dòng**, dòng cuối `0008_store_config.sql`. Chạy tiếp `SELECT store_name,bank_label,bank_account,tax_mode,tax_rate FROM pos_store_config WHERE id=1;`: phải thấy một hàng cấu hình. 0008 lấy ngân hàng OCB hiện có làm giá trị ban đầu; chủ tiệm sẽ đổi ở màn hình Quản lý tiệm.
 
-1. Tải `LotusPOS_Unified_v2.1.1_GitHub_Source.zip` trong tin nhắn, **giải nén**. Mở thư mục vừa giải nén tới chỗ thấy `wrangler.jsonc`, `package.json`, `src/`, `public/`, `migrations/` và `.github/`. Không tải ZIP hay APK lên GitHub.
-2. Mở [GitHub repo](https://github.com/LGL-AI/pos-unified) → chọn nhánh mặc định (thường là `main`) → **Add file → Upload files**. Kéo thả **toàn bộ nội dung bên trong** thư mục vừa giải nén vào trang upload, rồi **Commit changes**. Nếu trình duyệt không mang theo thư mục ẩn `.github`, làm theo bước 3.
-3. Kiểm tra ngay trên trang repo có `wrangler.jsonc` ở **gốc**, năm tệp `migrations/0001_…` đến `0005_…`, và `.github/workflows/initialize-d1.yml`. Nếu **thiếu workflow**, vào **Add file → Create new file**, gõ đúng tên `.github/workflows/initialize-d1.yml`, mở tệp cùng tên ở gói ZIP, sao chép **toàn bộ** nội dung vào khung rồi bấm **Commit changes**. Nút **Run workflow** chỉ có khi tệp này nằm trên **nhánh mặc định**.
-4. Nếu repo còn `wrangler.toml` hoặc `wrangler.json` ở gốc từ lần trước, xóa tệp cấu hình cũ trên GitHub Web (mở tệp → dấu ba chấm → **Delete file** → commit), để chỉ có `wrangler.jsonc`. Nếu không chắc tệp nào là cấu hình cũ, gửi ảnh danh sách gốc repo trước khi xóa.
+Nếu Action đỏ, bấm tên **job đỏ → bước đỏ** và chụp dòng lỗi; không chạy riêng các câu `ALTER TABLE` trên Console, không xóa dữ liệu. Nếu báo thiếu `CLOUDFLARE_D1_API_TOKEN`, kiểm tra GitHub repo → **Settings → Secrets and variables → Actions → Repository secrets**. Token này cần quyền đọc và ghi đúng D1 trong Cloudflare; không ghi giá trị token vào mã nguồn hay gửi qua chat.
 
-## Bước 2 — Cấp quyền D1 cho nút chạy trên GitHub
+## B. Đưa 4 UI và Worker lên GitHub
 
-1. Mở [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens) → **Create Token → Custom token → Get started**. Đặt tên `Lotus POS D1 migration`; phần **Permissions** chọn **Account → D1 → Edit**; phần **Account Resources** chỉ chọn tài khoản đang chứa D1 `pos_unified`. Bấm **Continue to summary → Create token** rồi **Copy**. Chỉ cần tạo **một lần**.
-2. Mở [Settings của repo GitHub](https://github.com/LGL-AI/pos-unified/settings) → bên trái **Secrets and variables → Actions** → **New repository secret**. Đặt **Name** chính xác `CLOUDFLARE_D1_API_TOKEN`, dán token vừa sao chép vào **Secret**, rồi **Add secret**. Không đưa token vào mã nguồn, tin nhắn hay ảnh chụp màn hình.
-3. Account ID đã có sẵn trong workflow; nó không phải mật khẩu. Token này chỉ để cài D1; Worker đang nối GitHub sẽ deploy qua Cloudflare Builds riêng.
+1. Tải và giải nén `LotusPOS_v2.5.0_02_Worker_4UI_GitHub_Web.zip`. Vào GitHub repo → `main` → **Add file → Upload files**. Kéo các tệp/thư mục trong ZIP vào repo **theo đúng đường dẫn**. Nếu GitHub giới hạn số tệp trong một lần, chia theo thư mục `src`, `public`, `android`, `tests` và nhóm còn lại. Commit xong mới xem Cloudflare. Không tải `bridge/config.local.json`, `bridge/jobs.local.json`, khóa ký APK hoặc file `.dev.vars` lên GitHub.
+2. Vào Cloudflare → **Workers & Pages → pos-unified → Settings → Builds**: repo phải là `LGL-AI/pos-unified`, nhánh `main`, thư mục gốc của repo, lệnh triển khai `npx wrangler deploy` (lệnh này Cloudflare tự chạy, bạn không phải nhập trên máy). Vào **Deployments/Builds**: commit vừa đưa lên phải **Success**. Cloudflare liên kết GitHub sẽ tự triển khai sau mỗi commit mới. Nếu đỏ, mở build để xem dòng lỗi rồi dừng tại đây.
+3. Vào Worker → **Settings → Bindings**: `DB` phải trỏ tới `pos_unified`. Ở **Variables and secrets**, giữ `SESSION_SECRET` và `POS_STAFF_PASSWORD` dưới loại **Secret**; `ORDERING_ENABLED=true` lấy từ `wrangler.jsonc`. Bản 2.5.0 kiểm tra có đủ hai secret trước khi deploy. Mật khẩu thử `123456` đã dùng trước đây, chủ tiệm nên đổi trên Cloudflare khi bắt đầu sử dụng thật. Tài khoản ngân hàng từ nay sửa trên **Quản lý tiệm**, không sửa `BANK_*` trong Cloudflare.
+4. Mở [/api/health](https://pos-unified.lgl247-ai.workers.dev/api/health). Cần thấy `"version":"2.5.0"`, `"d1":"ok"`, `"display":"ok"`, `"acceptingOrders":true`. Nếu không phải 2.5.0 thì build chưa chạy bản mới; nếu `d1` không `ok`, xem lại bước A và D1 binding. Chưa dùng tại quầy khi kiểm tra này chưa đúng.
 
-## Bước 3 — Bấm nút cài database
+## C. Thiết lập bằng màn hình quầy
 
-1. Trên [repo](https://github.com/LGL-AI/pos-unified), bấm **Actions** → **Initialize Lotus POS D1** ở cột trái → **Run workflow** ở bên phải → chọn nhánh mặc định đã upload → bấm **Run workflow** màu xanh.
-2. Chờ lần chạy mới hiện **dấu tích xanh**. Bấm vào lần chạy đó → **Apply D1 migrations to pos_unified** → xem bước **Print migration history**: phải có đủ `0001_initial.sql`, `0002_customer_members_vouchers.sql`, `0003_pos_cloud.sql`, `0004_loyalty_points.sql`, `0005_inventory_refunds_roles.sql`. Bước **Confirm there are no unapplied migrations** phải thành công.
-3. Qua Cloudflare **Storage & databases → D1 SQL Database → pos_unified → Console**, chạy câu kiểm tra ngắn sau; cần thấy **5**:
+1. Mở [POS quầy](https://pos-unified.lgl247-ai.workers.dev/counter/) → đăng nhập tài khoản **chủ tiệm** → **Quản lý tiệm**. Xác nhận tên quán, địa chỉ, mã số thuế, logo PNG, số bàn; chọn ngân hàng, BIN 6 chữ số, số tài khoản, tên người nhận và tiền tố nội dung; chọn giá đã có thuế hoặc cộng thuế, nhập thuế suất và **Lưu cấu hình D1**. Hãy xác nhận các con số ngân hàng/thuế thực tế trước khi nhận tiền.
+2. Các đường dẫn: [Quầy](https://pos-unified.lgl247-ai.workers.dev/counter/) · [POS cầm tay trên Web](https://pos-unified.lgl247-ai.workers.dev/staff/) · [QR bàn T01](https://pos-unified.lgl247-ai.workers.dev/qr/?table=T01). Màn hình thứ hai lấy liên kết ở **Quầy → Màn hình thứ hai → Tạo liên kết**, mở trên màn hình của quán. Giảm số bàn trong cấu hình sẽ chặn đơn mới ở bàn vượt giới hạn.
+3. Tại quầy vào **Kho**, nhập tồn số phần và tồn nguyên liệu có thật. QR đang mở sẽ đồng bộ và bỏ nhãn hết hàng khi **cả số phần và đủ nguyên liệu** đều có. Tạo đơn một món, kiểm tra số tiền/thuế trên QR và POS; in bếp, thêm món, tách 4 phần thành 4 bill, gộp hai bill chưa thanh toán; đối chiếu màn hình thứ hai. Thanh toán thử và chỉ bấm xác nhận chuyển khoản khi thực sự thấy tiền. Vào **Báo cáo → Xem ngày → Tải CSV** để so sánh bill, tiền hoàn và D1.
 
-   ```sql
-   SELECT COUNT(*) AS applied FROM d1_migrations;
-   ```
+## D. Máy in, két và máy quét tại quầy
 
-   Nếu Actions báo đỏ hoặc số khác 5, **không chạy SQL cũ, không nhận đơn thật**. Mở bước màu đỏ, gửi ảnh **phần lỗi** cho tao (che API token nếu vô tình hiện ra). Wrangler lưu lịch sử và bỏ qua migration đã áp, nên tao sẽ đối chiếu lỗi trước khi chọn bước tiếp theo.
+Tải `LotusPOS_v2.5.0_Cau_in_Windows.zip`, giải nén **trên máy Windows ở quầy**. Cài driver máy in tem và Node.js trên máy quầy, nhấp đúp `start-counter.cmd`; trình duyệt mở trang `http://127.0.0.1:18181/setup`. Chọn kết nối XP-Q200 và XP-365B bằng các ô trên trang; nếu dùng LAN, nhập IP và port thực tế. Chép **mã ghép** sang **Quầy → Thiết bị → Ghép cầu in** trên cùng máy. Sau khi ghép, chủ tiệm có thể sửa cấu hình ngay trong **Quầy → Thiết bị**; mọi địa chỉ IP/tên máy in nằm trên máy Windows quầy. Máy quét USB/Bluetooth HID: đưa con trỏ vào ô **Máy quét** và quét rồi Enter. Máy quét LAN: cài IP nguồn và port trong **Thiết bị**, cho phép port trên tường lửa Windows. Cắm két vào XP-Q200; chỉ bill tiền mặt đã thanh toán được gửi lệnh mở két. Xem [hướng dẫn lắp và kiểm giấy](docs/IN_QUAY_XPRINTER.md).
 
-## Bước 4 — Đặt secret cho Worker và kiểm tra website
+Máy cầm tay dùng máy in SUNMI/KV804 và cấu hình máy bếp LAN trong APK Cloud riêng. **Không có APK mới đã ký trong các ZIP**: bản APK Cloud 2.3.0 cũ vẫn có thể ghi đơn với Worker mới, nhưng hóa đơn native chưa in dòng thuế mới. Muốn cập nhật APK trên máy đang cài, phải xây dựng bằng đúng khóa ký UAT cũ. Tạm đặt thuế suất 0 nếu chỉ sử dụng APK cũ để in hóa đơn, cho tới khi có APK ký cùng khóa và đã kiểm trên giấy thật.
 
-1. Cloudflare → **Workers & Pages → pos-unified → Settings → Variables and Secrets → Add**. Tạo `SESSION_SECRET` loại **Secret**, dùng chuỗi ngẫu nhiên từ trình quản lý mật khẩu **ít nhất 32 ký tự**. Tạo `POS_STAFF_PASSWORD` loại **Secret**, tạm nhập `123456` như đã thống nhất. Bấm **Save/Deploy** nếu trang yêu cầu. Đây là **secret Worker**, khác secret GitHub vừa đặt.
-2. Trong **Settings → Builds**, kiểm tra repo kết nối là `LGL-AI/pos-unified`, root là gốc repo (`.` hoặc trống), **Build command** `npm test`, **Deploy command** `npx wrangler deploy`. Đây là nội dung ô cài đặt trên Cloudflare; mày không phải chạy lệnh. Mở **Deployments/Builds** để xem lần build theo commit mới nhất báo **Success/Deployed**. Nếu vẫn báo **Latest build failed**, mở **Build logs**, gửi ảnh dòng lỗi đầu tiên.
-3. Trong **Domains**, bật công tắc **Production** cho `pos-unified.lgl247-ai.workers.dev` nếu đang tắt. Mở [kiểm tra sức khỏe](https://pos-unified.lgl247-ai.workers.dev/api/health): phải thấy `"version":"2.1.1"`, `"d1":"ok"`, `"acceptingOrders":true`. Nếu chưa thấy đủ, gửi ảnh kết quả; đừng cho khách đặt đơn lúc này.
-
-## Bước 5 — Nhập kho, thử đơn và cài APK
-
-1. Mở [POS nhân viên](https://pos-unified.lgl247-ai.workers.dev/staff/) → đăng nhập `huang` / `123456` → **Kho** → nhập tồn **thực tế** cho món và nguyên liệu. Kho khởi đầu bằng 0; khách sẽ thấy hết hàng cho đến khi nhập kho.
-2. Thử [QR của bàn T01](https://pos-unified.lgl247-ai.workers.dev/?table=T01) trên điện thoại; thử đặt, thêm món, voucher, thành viên, tách bill và thanh toán. Đối chiếu QR OCB `609271` / `HUANG TIANSHENG` và đúng số tiền bằng ứng dụng ngân hàng; nhân viên kiểm tra tiền thực nhận rồi xác nhận trên POS. Thử in hóa đơn và phiếu bếp.
-3. Khi web đã chạy, cài APK cloud 2.1.1 trên SUNMI, thử lại in SUNMI và KV804 trên máy thật. APK cloud cài cạnh POS offline; SUNMI cần Internet để ghi đơn, máy in KV804 cần Wi-Fi nội bộ.
-4. Đổi `POS_STAFF_PASSWORD` sáu chữ số thành mật khẩu dài trước khi cho nhân viên/khách dùng rộng rãi.
-
-Nếu mắc ở bước nào, gửi ảnh **đúng màn hình đang lỗi**; che token và `SESSION_SECRET`.
+Nếu có lỗi sau cập nhật, vào **Workers & Pages → pos-unified → Deployments** để khôi phục phiên bản Worker trước đó, giữ nguyên D1 và mọi đơn đã ghi. Kiểm lại đơn phát sinh với thuế cộng thêm trước khi sửa hoặc hoàn. Gửi ảnh build đỏ/kết quả `/api/health` để khoanh lỗi.

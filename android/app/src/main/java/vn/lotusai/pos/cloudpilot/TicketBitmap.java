@@ -11,6 +11,8 @@ public final class TicketBitmap {
         if(p.optBoolean("reprint"))t.append("*** IN LẠI / 重印 ***\n");
         t.append(receipt?"HÓA ĐƠN / 收款小票":"PHIẾU BẾP / 厨房单").append('\n');
         t.append(p.optString("storeName","PHÁT TÀI POS")).append('\n');
+        if(receipt&&!p.optString("address").isEmpty())t.append(p.optString("address")).append('\n');
+        if(receipt&&!p.optString("taxNumber").isEmpty())t.append("MST: ").append(p.optString("taxNumber")).append('\n');
         t.append("BÀN / 桌: ").append(p.optString("table")).append('\n');
         t.append("Đơn / 订单: ").append(p.optString("orderCode")).append('\n');
         if(!receipt)t.append(p.optString("kind")).append(" · lần / 次 ").append(p.optInt("revision",1)).append('\n');
@@ -30,6 +32,7 @@ public final class TicketBitmap {
         if(receipt){
             t.append("Tạm tính / 小计: ").append(MainActivity.money(Math.round(p.optDouble("subtotal")))).append('\n');
             t.append("Giảm / 优惠: ").append(MainActivity.money(Math.round(p.optDouble("discount")))).append('\n');
+            if(p.optLong("taxAmount")>0)t.append("EXCLUSIVE".equals(p.optString("taxMode"))?"Thuế cộng thêm / 税: ":"Thuế đã gồm / 税: ").append(MainActivity.money(p.optLong("taxAmount"))).append('\n');
             t.append("TỔNG / 合计: ").append(MainActivity.money(Math.round(p.optDouble("total")))).append(" đ\n");
             if(p.optLong("refundedAmount")>0)t.append("ĐÃ HOÀN / 已退款: −").append(MainActivity.money(p.optLong("refundedAmount"))).append(" đ\n");
             t.append("Thanh toán / 支付: ").append(p.optString("paymentMethod")).append('\n');

@@ -6,7 +6,7 @@ import worker from '../src/worker.js';
 
 function setup(){
  const db=new DatabaseSync(':memory:');
- for(const n of ['0001_initial.sql','0002_customer_members_vouchers.sql','0003_pos_cloud.sql','0004_loyalty_points.sql','0005_inventory_refunds_roles.sql'])db.exec(readFileSync(new URL('../migrations/'+n,import.meta.url),'utf8'));
+ for(const n of ['0001_initial.sql','0002_customer_members_vouchers.sql','0003_pos_cloud.sql','0004_loyalty_points.sql','0005_inventory_refunds_roles.sql','0006_counter_display.sql','0007_counter_management.sql','0008_store_config.sql'])db.exec(readFileSync(new URL('../migrations/'+n,import.meta.url),'utf8'));
  const DB={prepare(sql){let a=[];return{bind(...v){a=v;return this},async first(){return db.prepare(sql).get(...a)||null},async all(){return{results:db.prepare(sql).all(...a)}},async run(){return{meta:{changes:db.prepare(sql).run(...a).changes}}},_run(){return db.prepare(sql).run(...a)}}},async batch(stmts){db.exec('BEGIN');try{const r=stmts.map(x=>x._run());db.exec('COMMIT');return r}catch(e){db.exec('ROLLBACK');throw e}}};
  const env={DB,ASSETS:{fetch:async()=>new Response('',{status:404})},ORDERING_ENABLED:'true',SESSION_SECRET:'abcdefabcdefabcdefabcdefabcdefabcdef',POS_STAFF_PASSWORD:'654321',BANK_BIN:'970448',BANK_ACCOUNT_NUMBER:'609271',BANK_ACCOUNT_NAME:'HUANG TIANSHENG'};
  const call=async(path,method='GET',data,token,extra={})=>{const headers={Origin:'https://pos.example',...extra};if(data!==undefined)headers['Content-Type']='application/json';if(token)headers.Authorization='Bearer '+token;const r=await worker.fetch(new Request('https://pos.example'+path,{method,headers,body:data===undefined?undefined:JSON.stringify(data)}),env);return{status:r.status,...await r.json()}};

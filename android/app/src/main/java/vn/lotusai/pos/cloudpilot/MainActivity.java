@@ -101,7 +101,7 @@ public class MainActivity extends Activity {
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         s.setCacheMode(WebSettings.LOAD_NO_CACHE);
         webView.clearCache(true);
-        s.setUserAgentString(s.getUserAgentString() + " LotusPOSCloud/2.1.1");
+        s.setUserAgentString(s.getUserAgentString() + " LotusPOSCloud/2.3.0");
         webView.setWebChromeClient(new WebChromeClient(){
             @Override public boolean onJsAlert(WebView v,String url,String message,JsResult result){
                 new AlertDialog.Builder(MainActivity.this).setMessage(message).setPositiveButton("OK",(d,w)->result.confirm()).setOnCancelListener(d->result.cancel()).show();return true;
@@ -299,7 +299,8 @@ public class MainActivity extends Activity {
     private void printReceiptData(JSONObject p) throws Exception {
         printer.setAlignment(1, null);
         printer.printTextWithFont(p.optString("storeName", "LOTUS POS") + "\n", null, 30f, null);
-        printer.printText(p.optString("address") + "\n" + p.optString("phone") + "\n", null);
+        if(!p.optString("address").isEmpty())printer.printText(p.optString("address") + "\n", null);
+        if(!p.optString("taxNumber").isEmpty())printer.printText("MST: " + p.optString("taxNumber") + "\n", null);
         printer.printTextWithFont("PHIEU THANH TOAN / 收款小票\n", null, 23f, null);
         printer.setAlignment(0, null);
         rule(); pair("DON / 订单", p.optString("orderCode")); pair("BAN / 桌", p.optString("table"));
@@ -314,6 +315,7 @@ public class MainActivity extends Activity {
         }
         rule(); pair("TAM TINH / 小计",money(Math.round(p.optDouble("subtotal",0))));
         pair("GIAM / 优惠","-"+money(Math.round(p.optDouble("discount",0))));
+        if(p.optLong("taxAmount")>0)pair("EXCLUSIVE".equals(p.optString("taxMode"))?"THUE THEM / 税":"THUE DA GOM / 税",money(p.optLong("taxAmount")));
         printer.printTextWithFont("TONG / 合计: "+money(Math.round(p.optDouble("total",0)))+" VND\n",null,27f,null);
         pair("THANH TOAN / 支付",p.optString("paymentMethod"));
         if("CASH".equals(p.optString("paymentMethod"))){pair("KHACH DUA / 实收",money(Math.round(p.optDouble("received",0))));pair("TIEN THOI / 找零",money(Math.round(p.optDouble("change",0))));}
@@ -346,7 +348,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void logout(){auth.logout();}
         @JavascriptInterface public boolean authorize(String permission){return auth.allowed(permission);}
         @JavascriptInterface public void printDailyReport(String id,String raw){submitPrint(id,"REPORT",raw);}
-        @JavascriptInterface public String getAppInfo(){return "{\"native\":true,\"version\":\"2.1.1-cloud\",\"sunmiSdk\":\"1.0.18\"}";}
+        @JavascriptInterface public String getAppInfo(){return "{\"native\":true,\"version\":\"2.3.0-cloud\",\"sunmiSdk\":\"1.0.18\"}";}
         @JavascriptInterface public void openCloudConnectivity(){runOnUiThread(()->startActivity(new Intent(MainActivity.this,CloudConnectivityActivity.class)));}
         @JavascriptInterface public void openKitchenSettings(){requireRole("printer_config");kitchen.openSettings();}
         @JavascriptInterface public void openKitchenJobs(){requireRole("kitchen");kitchen.openJobs();}

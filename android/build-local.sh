@@ -14,7 +14,7 @@ PRINTER_JAR="$BUILD_DIR/vendor/printerlibrary-1.0.18.jar"
 ASSETS="$BUILD_DIR/assets"
 KEYSTORE="${LOTUS_KEYSTORE:-$PROJECT_DIR/signing/lotus-cloud-pilot-uat.jks}"
 JAVAC_BIN="${JAVAC_BIN:-$PROJECT_DIR/../../jdk-bin/javac}"
-OUTPUT_APK="$PROJECT_DIR/dist/LotusPOS_Cloud_v2.1.1_SUNMI_D1_UAT.apk"
+OUTPUT_APK="$PROJECT_DIR/dist/LotusPOS_Cloud_v2.4.0_SUNMI_D1_UAT.apk"
 
 for required in "$TOOLS/aapt2" "$TOOLS/d8" "$TOOLS/zipalign" "$TOOLS/apksigner" "$ANDROID_JAR" "$PRINTER_AAR" "$JAVAC_BIN"; do
   if [[ ! -e "$required" ]]; then
@@ -40,8 +40,8 @@ unzip -p "$PRINTER_AAR" classes.jar > "$PRINTER_JAR"
   --manifest "$APP_DIR/AndroidManifest.xml" \
   --min-sdk-version 23 \
   --target-sdk-version 35 \
-  --version-code 5 \
-  --version-name 2.1.1 \
+  --version-code 8 \
+  --version-name 2.4.0 \
   -A "$ASSETS" \
   --java "$BUILD_DIR/generated" \
   "$BUILD_DIR/compiled/resources.zip"
@@ -56,20 +56,10 @@ cp "$BUILD_DIR/app-unsigned.apk" "$BUILD_DIR/app-with-dex.apk"
 zip -q -j "$BUILD_DIR/app-with-dex.apk" "$BUILD_DIR/dex/classes.dex"
 "$TOOLS/zipalign" -f -p 4 "$BUILD_DIR/app-with-dex.apk" "$BUILD_DIR/app-aligned.apk"
 
-if [[ -n "${LOTUS_KEYSTORE:-}" && ! -f "$KEYSTORE" ]]; then
-  echo "LOTUS_KEYSTORE does not exist" >&2
-  exit 1
-fi
 if [[ ! -f "$KEYSTORE" ]]; then
-  keytool -genkeypair -v \
-    -keystore "$KEYSTORE" \
-    -storepass android \
-    -keypass android \
-    -alias lotuscloudpilotuat \
-    -keyalg RSA \
-    -keysize 2048 \
-    -validity 10000 \
-    -dname "CN=Lotus POS Cloud Pilot UAT,O=LotusAI,C=VN" >/dev/null 2>&1
+  echo "Missing original UAT keystore: $KEYSTORE" >&2
+  echo "A new key cannot update the Cloud APK already installed on SUNMI. Supply the original UAT keystore with LOTUS_KEYSTORE." >&2
+  exit 1
 fi
 
 KEY_ALIAS="${LOTUS_KEY_ALIAS:-lotuscloudpilotuat}"

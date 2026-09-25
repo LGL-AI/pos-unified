@@ -5,7 +5,7 @@ import {DatabaseSync} from 'node:sqlite';
 import worker from '../src/worker.js';
 
 const db=new DatabaseSync(':memory:');
-for(const n of ['0001_initial.sql','0002_customer_members_vouchers.sql','0003_pos_cloud.sql','0004_loyalty_points.sql','0005_inventory_refunds_roles.sql'])db.exec(readFileSync(new URL('../migrations/'+n,import.meta.url),'utf8'));db.exec('UPDATE pos_product_inventory SET stock=100; UPDATE pos_ingredients SET stock=100000;');
+for(const n of ['0001_initial.sql','0002_customer_members_vouchers.sql','0003_pos_cloud.sql','0004_loyalty_points.sql','0005_inventory_refunds_roles.sql','0006_counter_display.sql','0007_counter_management.sql','0008_store_config.sql'])db.exec(readFileSync(new URL('../migrations/'+n,import.meta.url),'utf8'));db.exec('UPDATE pos_product_inventory SET stock=100; UPDATE pos_ingredients SET stock=100000;');
 const DB={prepare(sql){let args=[];return {bind(...v){args=v;return this},async first(){return db.prepare(sql).get(...args)||null},async all(){return {results:db.prepare(sql).all(...args)}},async run(){const r=db.prepare(sql).run(...args);return {meta:{changes:r.changes}}},_run(){return db.prepare(sql).run(...args)}}},async batch(statements){db.exec('BEGIN');try{const results=statements.map(q=>q._run());db.exec('COMMIT');return results}catch(e){db.exec('ROLLBACK');throw e}}};
 const env={DB,ASSETS:{fetch:async()=>new Response('not found',{status:404})},ORDERING_ENABLED:'true',ALLOW_UNVERIFIED_MEMBER_VOUCHERS:'true',SESSION_SECRET:'local-test-secret-aabbccddeeff00112233445566778899',POS_STAFF_PASSWORD:'local-staff-password-only-for-tests',BANK_BIN:'970448',BANK_ACCOUNT_NUMBER:'1234567890',BANK_ACCOUNT_NAME:'PHAT TAI TEST'};
 const send=async(path,method='GET',body=null,extra={},settings=env)=>{const headers={'Origin':'https://qr.example.test',...extra};if(body!==null)headers['Content-Type']='application/json';const resp=await worker.fetch(new Request('https://qr.example.test'+path,{method,headers,body:body===null?undefined:JSON.stringify(body)}),settings);const ct=resp.headers.get('Content-Type')||'';return {status:resp.status,headers:resp.headers,data:ct.includes('json')?await resp.json():await resp.text()}};
@@ -19,6 +19,11 @@ await test('secure default, health and no kitchen routes or assets',async()=>{
  assert.equal((await send('/api/health','GET',null,{}, {...env,DB:undefined})).data.acceptingOrders,false);
  assert.equal((await send('/api/health')).data.acceptingOrders,true);
  assert.equal((await send('/api/health')).data.d1,'ok');
+ const partial=new DatabaseSync(':memory:');for(const name of ['0001_initial.sql','0002_customer_members_vouchers.sql','0003_pos_cloud.sql','0004_loyalty_points.sql','0005_inventory_refunds_roles.sql','0006_counter_display.sql','0007_counter_management.sql'])partial.exec(readFileSync(new URL('../migrations/'+name,import.meta.url),'utf8'));
+ partial.exec('CREATE TABLE pos_store_config(id INTEGER PRIMARY KEY,table_count INTEGER,bank_bin TEXT,tax_rate INTEGER,tax_mode TEXT)');
+ partial.exec("INSERT INTO pos_store_config(id,table_count,bank_bin,tax_rate,tax_mode) VALUES(1,99,'970448',0,'INCLUSIVE')");
+ const partialDB={prepare(sql){return{async first(){return partial.prepare(sql).get()||null}}}};
+ const unready=await send('/api/health','GET',null,{}, {...env,DB:partialDB});assert.equal(unready.data.d1,'unavailable');assert.equal(unready.data.acceptingOrders,false);partial.close();
  assert.equal((await send('/api/catalog')).data.catalog.products.length,13);
  for(const path of ['/kitchen/','/assets/kitchen.js'])assert.equal((await send(path)).status,404,path);
  assert.equal((await send('/api/staff/orders')).status,401);

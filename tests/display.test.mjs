@@ -1,0 +1,36 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {DatabaseSync} from 'node:sqlite';
+import worker from '../src/worker.js';
+
+test('four UI routes share the same Worker; paired display reads only server-calculated D1 snapshots',async()=>{
+ const db=new DatabaseSync(':memory:');
+ for(const n of ['0001_initial.sql','0002_customer_members_vouchers.sql','0003_pos_cloud.sql','0004_loyalty_points.sql','0005_inventory_refunds_roles.sql','0006_counter_display.sql','0007_counter_management.sql','0008_store_config.sql'])db.exec(readFileSync(new URL('../migrations/'+n,import.meta.url),'utf8'));
+ db.exec('UPDATE pos_product_inventory SET stock=100; UPDATE pos_ingredients SET stock=100000;');
+ const DB={prepare(sql){let args=[];return{bind(...v){args=v;return this},async first(){return db.prepare(sql).get(...args)||null},async all(){return{results:db.prepare(sql).all(...args)}},async run(){return{meta:{changes:db.prepare(sql).run(...args).changes}}},_run(){return db.prepare(sql).run(...args)}}},async batch(q){db.exec('BEGIN');try{const r=q.map(x=>x._run());db.exec('COMMIT');return r}catch(e){db.exec('ROLLBACK');throw e}}};
+ const env={DB,ORDERING_ENABLED:'true',SESSION_SECRET:'display-test-0123456789abcdef0123456789',POS_STAFF_PASSWORD:'test-staff-password-123456',BANK_BIN:'970448',BANK_ACCOUNT_NUMBER:'609271',BANK_ACCOUNT_NAME:'HUANG TIANSHENG',ASSETS:{fetch:async(req)=>new Response(new URL(req.url).pathname,{headers:{'Content-Type':'text/html'}})}};
+ const ask=async(path,method='GET',body,extra={})=>{const r=await worker.fetch(new Request('https://pos.test'+path,{method,headers:{Origin:'https://pos.test',...(body===undefined?{}:{'Content-Type':'application/json'}),...extra},body:body===undefined?undefined:JSON.stringify(body)}),env);return{status:r.status,headers:r.headers,data:r.headers.get('Content-Type')?.includes('json')?await r.json():await r.text()}};
+ for(const p of ['/counter/','/display/','/staff/','/qr/?table=T01'])assert.equal((await ask(p)).status,200,p);
+ assert.match((await ask('/counter/')).headers.get('Content-Security-Policy'),/http:\/\/127\.0\.0\.1:18181/);
+ assert.doesNotMatch((await ask('/qr/')).headers.get('Content-Security-Policy'),/127\.0\.0\.1/);
+ const health=await ask('/api/health');assert.equal(health.data.version,'2.5.0');assert.equal(health.data.display,'ok');assert.equal(health.data.acceptingOrders,true);
+ assert.equal((await ask('/api/staff/display','POST',{})).status,401);
+ const login=await ask('/api/staff/login','POST',{username:'huang',password:env.POS_STAFF_PASSWORD}),auth={Authorization:'Bearer '+login.data.token};assert.equal(login.status,200);
+ const paired=await ask('/api/staff/display','POST',{},auth);assert.equal(paired.status,201);
+ const pid=paired.data.id,tok=paired.data.token;
+ const bad=await ask('/api/display/'+pid);assert.equal(bad.status,401);
+ assert.equal((await ask('/api/display/'+pid,'GET',undefined,{'X-Display-Token':'A'.repeat(43)})).status,403);
+ const draft=await ask('/api/staff/display/'+pid,'PUT',{table:'T01',items:[{productId:'101',qty:2,price:1,mods:{size:'中',spice:'中'}}],revision:1},auth);assert.equal(draft.status,200,JSON.stringify(draft.data));
+ const publicDraft=await ask('/api/display/'+pid,'GET',undefined,{'X-Display-Token':tok});assert.equal(publicDraft.status,200);assert.equal(publicDraft.data.snapshot.total,260000);assert.equal(publicDraft.data.snapshot.bankPayment,null);assert.equal(JSON.stringify(publicDraft.data).includes('memberId'),false);
+ const created=await ask('/api/staff/orders','POST',{table:'T01',items:[{productId:'101',qty:2,mods:{size:'中',spice:'中'}}],idempotencyKey:'counter_display_test_00001'},auth);assert.equal(created.status,201,JSON.stringify(created.data));
+ const order=created.data.order;assert.equal((await ask('/api/staff/display/'+pid,'PUT',{orderId:order.id,revision:2},auth)).status,200);
+ const publicOrder=await ask('/api/display/'+pid,'GET',undefined,{'X-Display-Token':tok});assert.equal(publicOrder.data.snapshot.code,order.code);assert.equal(publicOrder.data.snapshot.bankPayment.account,'609271');
+ const paid=await ask('/api/staff/orders/'+order.id+'/pay','POST',{version:order.version,method:'CASH',received:300000},auth);assert.equal(paid.status,200);
+ await ask('/api/staff/display/'+pid,'PUT',{orderId:order.id,revision:3},auth);
+ const publicPaid=await ask('/api/display/'+pid,'GET',undefined,{'X-Display-Token':tok});assert.equal(publicPaid.data.snapshot.paymentStatus,'PAID');assert.equal(publicPaid.data.snapshot.bankPayment,null);
+ const summary=await ask('/api/staff/summary','GET',undefined,auth);assert.equal(summary.data.summary.paidOrders,1);assert.equal(summary.data.summary.gross,260000);
+ assert.equal((await ask('/api/staff/display/'+pid,'DELETE',undefined,auth)).status,200);
+ assert.equal((await ask('/api/display/'+pid,'GET',undefined,{'X-Display-Token':tok})).status,403);
+ db.close();
+});
