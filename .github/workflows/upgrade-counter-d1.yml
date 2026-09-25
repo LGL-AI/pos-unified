@@ -1,0 +1,34 @@
+name: Upgrade Lotus POS D1 0006 and 0007
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lotus-pos-d1-migrations
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_ACCOUNT_ID: "8973c5ef559d1c731b6c1a7b4586ca23"
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Require the existing D1 token
+        run: test -n "$CLOUDFLARE_API_TOKEN"
+      - name: Install Wrangler
+        run: npm install --no-audit --no-fund
+      - name: Check existing migration history
+        run: npx wrangler d1 execute pos_unified --remote --command "SELECT name FROM d1_migrations ORDER BY id;"
+      - name: Safely import and verify migrations 0006 and 0007
+        run: node scripts/upgrade-d1-0007.mjs
+      - name: Verify display, catalog, voucher, shifts and attendance schema
+        run: npx wrangler d1 execute pos_unified --remote --command "SELECT name FROM sqlite_schema WHERE type='table' AND name IN ('pos_display_sessions','pos_products','pos_shift_schedules','pos_attendance','pos_cash_shifts','pos_license_poc') ORDER BY name;"
