@@ -1,5 +1,3 @@
--- 0009: orders never fail because of physical or estimated stock. Keep the
--- physical count entered by staff; track signed, approximate usage separately.
 -- STEP 01
 CREATE TABLE IF NOT EXISTS pos_inventory_estimates (
  target TEXT NOT NULL CHECK(target IN ('PRODUCT','INGREDIENT')),
@@ -31,15 +29,12 @@ CREATE TRIGGER IF NOT EXISTS pos_estimate_ingredient_stock_sync AFTER UPDATE OF 
  UPDATE pos_inventory_estimates SET estimated_stock=estimated_stock+(NEW.stock-OLD.stock)
  WHERE target='INGREDIENT' AND ref_id=NEW.id;
 END;
--- Include any stock records created while the helper triggers were being installed.
 -- STEP 08
 INSERT OR IGNORE INTO pos_inventory_estimates(target,ref_id,estimated_stock)
  SELECT 'PRODUCT',product_id,stock FROM pos_product_inventory;
 -- STEP 09
 INSERT OR IGNORE INTO pos_inventory_estimates(target,ref_id,estimated_stock)
  SELECT 'INGREDIENT',id,stock FROM pos_ingredients;
--- Rebase only while BOTH legacy order triggers still exist. The migration
--- runner skips these two steps if it is resuming after the first legacy DROP.
 -- STEP 10
 UPDATE pos_inventory_estimates SET estimated_stock=(
  SELECT stock FROM pos_product_inventory WHERE product_id=ref_id)
@@ -48,7 +43,6 @@ WHERE target='PRODUCT';
 UPDATE pos_inventory_estimates SET estimated_stock=(
  SELECT stock FROM pos_ingredients WHERE id=ref_id)
 WHERE target='INGREDIENT';
--- Install replacement triggers before dropping the legacy blocking triggers.
 -- STEP 12
 CREATE TRIGGER IF NOT EXISTS pos_stock_new_v9 AFTER INSERT ON qr_orders
 WHEN NEW.inventory_tracked=1 AND NOT EXISTS(
