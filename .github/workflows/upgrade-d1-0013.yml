@@ -13,7 +13,7 @@ concurrency:
 jobs:
   migrate:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       CLOUDFLARE_ACCOUNT_ID: "8973c5ef559d1c731b6c1a7b4586ca23"
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_API_TOKEN }}
@@ -26,9 +26,51 @@ jobs:
         run: test -n "$CLOUDFLARE_API_TOKEN"
       - name: Install Wrangler
         run: npm install --no-audit --no-fund
-      - name: Confirm special 0009 upgrade was completed first
-        run: node scripts/check-d1-ready.mjs --through-0009
-      - name: Apply remaining migrations in order
-        run: npm run db:remote
+      - name: Inspect migration history and partial schema
+        id: inspect
+        run: |
+          node --input-type=module <<'NODE'
+          import {readFileSync,readdirSync,appendFileSync} from 'node:fs';
+          const config=JSON.parse(readFileSync('wrangler.jsonc','utf8'));
+          const id=config.d1_databases.find(x=>x.binding==='DB'&&x.database_name==='pos_unified')?.database_id;
+          if(!id)throw Error('D1 binding missing');
+          const query=async sql=>{
+            const response=await fetch(`https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/d1/database/${id}/query`,{
+              method:'POST',headers:{Authorization:`Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,'Content-Type':'application/json'},
+              body:JSON.stringify({sql})});
+            const body=await response.json();
+            if(!response.ok||!body.success||!body.result?.[0]?.success)throw Error(`Could not inspect live D1: ${sql}`);
+            return body.result[0].results||[];
+          };
+          const expected=readdirSync('migrations').filter(x=>/^\d{4}_.+\.sql$/.test(x)).sort();
+          const history=(await query('SELECT name FROM d1_migrations ORDER BY id')).map(x=>x.name);
+          if(expected.length!==13||history.length<9||history.length>13||history.some((name,i)=>name!==expected[i]))
+            throw Error(`Unexpected D1 history: ${history.join(', ')}`);
+          const start=history.length-9;
+          const markers=[
+            "SELECT name FROM sqlite_schema WHERE name='pos_supplier_deliveries'",
+            "SELECT name FROM sqlite_schema WHERE name='pos_menu_options'",
+            "SELECT name FROM sqlite_schema WHERE name='pos_order_daily_sequence'",
+            "SELECT name FROM pragma_table_info('qr_orders') WHERE name='payment_preference'"
+          ];
+          if(start<4&&(await query(markers[start])).length)
+            throw Error(`Partial ${expected[history.length]} schema exists; stop and inspect D1`);
+          appendFileSync(process.env.GITHUB_OUTPUT,`start=${start}\n`);
+          console.log(`D1 has ${history.length} complete migrations; resuming at ${expected[history.length]||'verification'}.`);
+          NODE
+      - name: Import 0010 through 0013 and record each migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(0010_shift_ops.sql 0011_echo_menu.sql 0012_payment_first_service_receipts.sql 0013_cash_intent_feedback.sql)
+          for ((i=${{ steps.inspect.outputs.start }}; i<${#files[@]}; i++)); do
+            name="${files[i]}"
+            staged="$(mktemp --suffix=.sql)"
+            cat "migrations/$name" > "$staged"
+            printf "\nINSERT INTO d1_migrations(name) VALUES ('%s');\n" "$name" >> "$staged"
+            echo "Importing $name"
+            npx wrangler d1 execute DB --remote --file="$staged" --yes
+            rm -f "$staged"
+          done
       - name: Verify all 13 migrations and Echo menu
         run: npm run check:d1
