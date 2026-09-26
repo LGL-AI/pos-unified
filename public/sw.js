@@ -1,4 +1,4 @@
-const VERSION='lotus-qr-static-v2.3.0-20260924';
+const VERSION='lotus-qr-static-v2.6.0-rc4-20260926';
 const SHELL=['/','/index.html','/offline.html','/manifest.webmanifest','/catalog.json','/assets/app.css','/assets/app.js','/assets/qrcode.js','/icons/icon-192.png','/icons/icon-512.png'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(VERSION).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith('lotus-qr-static-')&&key!==VERSION).map(key=>caches.delete(key)))).then(()=>self.clients.claim()))});

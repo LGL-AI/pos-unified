@@ -31,7 +31,7 @@ export async function displayStaff(req,env,actor,deps){
   const order=await env.DB.prepare('SELECT * FROM qr_orders WHERE id=?').bind(d.orderId).first();
   if(!order)return bad(404,'ORDER_NOT_FOUND');
   const o=deps.hydrate(order),[bills,refund]=await Promise.all([env.DB.prepare('SELECT sequence,total,payment_status FROM pos_bills WHERE order_id=? ORDER BY sequence').bind(d.orderId).all(),env.DB.prepare('SELECT COALESCE(SUM(amount),0) AS amount FROM pos_refunds WHERE order_id=?').bind(d.orderId).first()]);
-  snapshot={table:o.table,items:storable(o.items),subtotal:o.subtotal,discount:o.discount,total:o.total,taxAmount:o.taxAmount,taxMode:o.taxMode,refundedAmount:refund?.amount||0,code:o.code,paymentStatus:o.paymentStatus,status:o.status,bills:bills.results.map(b=>({number:b.sequence,total:b.total,paid:b.payment_status==='PAID'})),bankPayment:o.paymentStatus==='PAID'||o.status==='SPLIT'?null:o.bankPayment};
+  snapshot={stage:'PAYMENT',table:o.table,items:storable(o.items),subtotal:o.subtotal,discount:o.discount,total:o.total,taxAmount:o.taxAmount,taxMode:o.taxMode,refundedAmount:refund?.amount||0,code:o.code,paymentStatus:o.paymentStatus,paymentPreference:o.paymentPreference,status:o.status,bills:bills.results.map(b=>({number:b.sequence,total:b.total,paid:b.payment_status==='PAID'})),bankPayment:o.paymentStatus==='PAID'||o.status==='SPLIT'||o.paymentPreference==='CASH'?null:o.bankPayment};
  }else if(d.items){
   if(!Array.isArray(d.items)||d.items.length>30)return bad(400,'INVALID_CART');
   const table=clean(d.table,20).toUpperCase();

@@ -1,3 +1,4 @@
+import {applyCurrentSchema} from './helpers/schema.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -6,10 +7,10 @@ import vm from 'node:vm';
 import worker from '../src/worker.js';
 
 test('touch UI provisions stock, records payment/refund and creates cloud roles/accounts',async()=>{
- const db=new DatabaseSync(':memory:');for(const n of ['0001_initial.sql','0002_customer_members_vouchers.sql','0003_pos_cloud.sql','0004_loyalty_points.sql','0005_inventory_refunds_roles.sql','0006_counter_display.sql','0007_counter_management.sql','0008_store_config.sql'])db.exec(readFileSync(new URL('../migrations/'+n,import.meta.url),'utf8'));
+ const db=new DatabaseSync(':memory:');applyCurrentSchema(db,{legacyMenu:true});
  const DB={prepare(sql){let a=[];return{bind(...v){a=v;return this},async first(){return db.prepare(sql).get(...a)||null},async all(){return{results:db.prepare(sql).all(...a)}},async run(){return{meta:{changes:db.prepare(sql).run(...a).changes}}},_run(){return db.prepare(sql).run(...a)}}},async batch(stmts){db.exec('BEGIN');try{const r=stmts.map(x=>x._run());db.exec('COMMIT');return r}catch(e){db.exec('ROLLBACK');throw e}}};
  const env={DB,ORDERING_ENABLED:'true',SESSION_SECRET:'test-secret-012345678901234567890123',POS_STAFF_PASSWORD:'654321',BANK_BIN:'970448',BANK_ACCOUNT_NUMBER:'609271',BANK_ACCOUNT_NAME:'HUANG TIANSHENG'};
- const app={innerHTML:''},connection={textContent:'',classList:{toggle(){}}},listeners={},inputs={'#order-note':{value:''},'#voucher':{value:''}};
+ const app={innerHTML:'',querySelector:()=>null},connection={textContent:'',classList:{toggle(){}}},listeners={},inputs={'#order-note':{value:''},'#voucher':{value:''}};
  const document={querySelector(s){return s==='#app'?app:s==='#connection'?connection:inputs[s]||null},addEventListener(t,f){listeners[t]=f}};
  const storage=new Map();let quantity='10000';
  const context={document,localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},crypto,Response,Request,URL,Intl,JSON,Number,Array,String,Math,Date,console,AbortSignal,setTimeout:(fn,ms)=>ms===7000?0:setTimeout(fn,ms),clearTimeout,confirm:()=>true,prompt:(label,value)=>label.includes('Số lượng nhập')?quantity:label.includes('Lý do hoặc')?'Phiếu kiểm thử':value??'',navigator:{},fetch:async(path,opts={})=>worker.fetch(new Request('https://pos.example'+path,{method:opts.method||'GET',headers:{Origin:'https://pos.example',...opts.headers},body:opts.body}),env)};
@@ -22,7 +23,7 @@ test('touch UI provisions stock, records payment/refund and creates cloud roles/
  const submit=async target=>listeners.submit({target,preventDefault(){}});
  await new Promise(r=>setTimeout(r,10));
  await submit({id:'login',password:field('654321'),username:field('huang')});
- await click({screen:'new'});assert.match(app.innerHTML,/Chưa có món đủ tồn kho/);
+ await click({screen:'new'});assert.match(app.innerHTML,/data-add="101"/);
  await click({screen:'inventory'});assert.match(app.innerHTML,/Kho hàng/);
  quantity='2';await click({adjustTarget:'PRODUCT',stockId:'101',stockKind:'RECEIPT'});
  quantity='10000';for(const ing of ['ING-PORK-HOCK','ING-DUCK','ING-CHICKEN','ING-RICE'])await click({adjustTarget:'INGREDIENT',stockId:ing,stockKind:'RECEIPT'});
@@ -31,7 +32,7 @@ test('touch UI provisions stock, records payment/refund and creates cloud roles/
  const order=db.prepare('SELECT * FROM qr_orders ORDER BY created_at DESC').get();assert.equal(order.total,130000);
  await click({pay:order.id,method:'CASH'});assert.equal(db.prepare('SELECT payment_status FROM qr_orders WHERE id=?').get(order.id).payment_status,'PAID');
  await click({screen:'refunds'});assert.match(app.innerHTML,/Hoàn tiền/);await click({open:order.id});assert.match(app.innerHTML,/Ghi hoàn tiền/);
- await submit(form('',{amount:field('30000'),reason:field('Món cần đổi'),method:field('CASH')},{bill:'',order:order.id},{'refund-form':true}));
+ await submit(form('',{amount:field('30000'),reason:field('Món cần đổi'),method:field('CASH'),category:field('RETURNED'),itemProductId:field('101'),itemQuantity:field('1'),itemAmount:field('30000')},{bill:'',order:order.id},{'refund-form':true}));
  assert.equal(db.prepare('SELECT SUM(amount) AS amount FROM pos_refunds').get().amount,30000);assert.match(app.innerHTML,/Đã hoàn/);
  await click({screen:'team'});assert.match(app.innerHTML,/Tạo tài khoản nhân viên/);
  await submit(form('role-create',{id:field('ASSISTANT'),name:field('Phụ việc'),'perm-1':{value:'ORDER_VIEW',checked:true}}));

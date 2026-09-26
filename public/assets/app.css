@@ -55,3 +55,6 @@ button .bi,.chip .bi,.table-pill .bi{align-items:center;text-align:center}
 @media(max-width:359px){.voucher-controls{flex-wrap:wrap}.voucher-controls .secondary{width:100%}.offer{align-items:flex-start;flex-wrap:wrap}}
 
 .search-label{display:block;font-size:11px;color:var(--muted);margin-bottom:7px;font-weight:650}.search-label .bi{align-items:flex-start}.toast span{display:block}.toast span+span{font-size:.9em;opacity:.9;margin-top:3px}
+.member-page .panel{min-width:0}.member-page form{display:grid;gap:10px;min-width:0}.member-page form .field{min-width:0;margin:5px 0}.member-page form input{width:100%;max-width:100%;min-width:0;box-sizing:border-box}.member-page .auth-switch{margin-bottom:16px}.password-change{margin:18px 0;padding-top:15px;border-top:1px solid var(--line);text-align:left}.password-change h3{margin:0;font-size:16px}
+.cart-submit-label{display:block;min-width:0;overflow-wrap:anywhere;line-height:1.3;text-align:left}.service-request{margin:16px 0 5px}.payment-card .secondary{margin:4px}
+.result .service-confirmation{padding:20px;text-align:center;background:#f1faf2;border-color:#acd5b4;color:#254b34;font-size:clamp(17px,4.5vw,22px);line-height:1.45}

@@ -1,4 +1,15 @@
-# Lotus POS Unified 2.5.0 · 4 UI dùng chung Cloudflare D1
+# Lotus POS Unified · Echo Coffee 2.6.0-rc.4 (gói Cloudflare)
+
+Đọc [hướng dẫn đưa rc.4 lên Cloudflare](DEPLOY_CLOUDFLARE_RC4.md) trước khi đẩy source. **Phải xác nhận D1 thật đã áp 0001–0013 trước khi chạy workflow deploy.** Bản này ẩn UI quản lý license POC tại quầy; dữ liệu license và API cũ vẫn giữ để tương thích. Bộ 80 case khách mới và toàn suite chạy trên Node/SQLite, chưa phải UAT D1 và thiết bị thật.
+
+Đọc [phạm vi đã nối D1, chỗ POC còn thiếu và cách mở local](docs/ECHO_COFFEE_2.6_RC1.md) trước khi dùng bản thử này. Phần bên dưới mô tả nền 2.5.1 đã có trước gói Echo Coffee.
+
+## Thay đổi 2.5.1 (chưa tự áp lên quán)
+
+- Đơn QR/quầy/POS cầm tay bán món đang bật dù tồn món hoặc nguyên liệu bằng 0. Không yêu cầu nhập giả tồn để thử bán.
+- Tồn ghi sổ/phiếu nhập được giữ độc lập; `pos_inventory_estimates` ghi mức tiêu hao ước tính có thể âm và không khóa bán. Hủy món/đơn, nhập kho, hoàn tiền chọn nhập lại đều điều chỉnh tồn ước tính; nhật ký đơn vẫn giữ nguyên.
+- Nếu D1 đã áp đến 0008: tải `migrations/0009_sales_independent_inventory.sql`, `scripts/upgrade-d1-0009.mjs` và `.github/workflows/upgrade-d1-0009.yml` lên GitHub theo đúng đường dẫn. Chạy workflow `Upgrade Lotus POS D1 0009 - Sales independent from inventory` và kiểm tra Console thấy 9 dòng migration, dòng cuối là 0009. **Chỉ sau đó** cập nhật Worker/4 UI. Không chạy SQL xóa hay sửa tồn kho trực tiếp.
+- POS quầy lấy trực tiếp POC `LotusPOS_POC_VN_CN_FnB_v10_MEMBER.html` làm mẫu cho sidebar song ngữ, đầu trang, thẻ bán hàng, tìm kiếm/danh mục, màn QR Order, bảng sản phẩm/voucher + form và lịch ca 7 ngày × 16 giờ; các ô lịch và nút đang có giữ hành vi D1. Đây là bước chuyển giao diện, **chưa phải bản sao đủ mọi màn/tính năng giả lập**: OT, đổi ca, nghỉ phép và checklist trong POC còn cần mô hình dữ liệu/API riêng, không hiển thị nút giả tạo dữ liệu localStorage trên quầy thật.
 
 Bốn đường dẫn trên cùng Worker `pos-unified` và database `pos_unified`:
 

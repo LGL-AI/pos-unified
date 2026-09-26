@@ -1,3 +1,4 @@
+import {applyCurrentSchema} from './helpers/schema.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -5,13 +6,13 @@ import {DatabaseSync} from 'node:sqlite';
 import worker from '../src/worker.js';
 
 const db=new DatabaseSync(':memory:');
-for(const n of ['0001_initial.sql','0002_customer_members_vouchers.sql','0003_pos_cloud.sql','0004_loyalty_points.sql','0005_inventory_refunds_roles.sql','0006_counter_display.sql','0007_counter_management.sql','0008_store_config.sql'])db.exec(readFileSync(new URL('../migrations/'+n,import.meta.url),'utf8'));db.exec('UPDATE pos_product_inventory SET stock=100; UPDATE pos_ingredients SET stock=100000;');
+applyCurrentSchema(db,{legacyMenu:true});db.exec('UPDATE pos_product_inventory SET stock=100; UPDATE pos_ingredients SET stock=100000;');
 const DB={prepare(sql){let args=[];return {bind(...v){args=v;return this},async first(){return db.prepare(sql).get(...args)||null},async all(){return {results:db.prepare(sql).all(...args)}},async run(){const r=db.prepare(sql).run(...args);return {meta:{changes:r.changes}}},_run(){return db.prepare(sql).run(...args)}}},async batch(statements){db.exec('BEGIN');try{const results=statements.map(q=>q._run());db.exec('COMMIT');return results}catch(e){db.exec('ROLLBACK');throw e}}};
 const env={DB,ASSETS:{fetch:async()=>new Response('not found',{status:404})},ORDERING_ENABLED:'true',ALLOW_UNVERIFIED_MEMBER_VOUCHERS:'true',SESSION_SECRET:'local-test-secret-aabbccddeeff00112233445566778899',POS_STAFF_PASSWORD:'local-staff-password-only-for-tests',BANK_BIN:'970448',BANK_ACCOUNT_NUMBER:'1234567890',BANK_ACCOUNT_NAME:'PHAT TAI TEST'};
 const send=async(path,method='GET',body=null,extra={},settings=env)=>{const headers={'Origin':'https://qr.example.test',...extra};if(body!==null)headers['Content-Type']='application/json';const resp=await worker.fetch(new Request('https://qr.example.test'+path,{method,headers,body:body===null?undefined:JSON.stringify(body)}),settings);const ct=resp.headers.get('Content-Type')||'';return {status:resp.status,headers:resp.headers,data:ct.includes('json')?await resp.json():await resp.text()}};
 const item=(qty=2)=>({productId:'101',qty,price:1,mods:{size:'中',spice:'不辣',note:'không hành'}});
 const order=(key)=>({table:'T01',idempotencyKey:key,items:[item()],note:'gần cửa',total:1});
-const register=(phone='0912345678')=>({name:'Lê Thanh Bình',phone,password:'long-and-safe-test-password-2026'});
+const register=(phone='0912345678')=>({name:'Lê Thanh Bình',phone});
 const cookieOf=r=>r.headers.get('set-cookie')?.split(';')[0];
 
 await test('secure default, health and no kitchen routes or assets',async()=>{
@@ -24,7 +25,7 @@ await test('secure default, health and no kitchen routes or assets',async()=>{
  partial.exec("INSERT INTO pos_store_config(id,table_count,bank_bin,tax_rate,tax_mode) VALUES(1,99,'970448',0,'INCLUSIVE')");
  const partialDB={prepare(sql){return{async first(){return partial.prepare(sql).get()||null}}}};
  const unready=await send('/api/health','GET',null,{}, {...env,DB:partialDB});assert.equal(unready.data.d1,'unavailable');assert.equal(unready.data.acceptingOrders,false);partial.close();
- assert.equal((await send('/api/catalog')).data.catalog.products.length,13);
+ assert.equal((await send('/api/catalog')).data.catalog.products.filter(p=>p.id.startsWith('EC_')).length,85);
  for(const path of ['/kitchen/','/assets/kitchen.js'])assert.equal((await send(path)).status,404,path);
  assert.equal((await send('/api/staff/orders')).status,401);
  assert.equal((await send('/api/orders','GET')).status,405);
@@ -34,15 +35,15 @@ await test('register, login, logout, wrong password and private member cookie',a
  const r=await send('/api/member/register','POST',register());assert.equal(r.status,201,JSON.stringify(r.data));assert.equal(r.data.member.pointsSynced,true);assert.equal(r.data.member.tier,'Member');assert.equal(r.data.member.spend,0);assert.equal(r.data.member.phoneVerified,false);
  assert.match(r.headers.get('set-cookie'),/HttpOnly; Secure; SameSite=Lax/);
  assert.ok(!JSON.stringify(r.data).includes('password_hash'));
- const stored=db.prepare('SELECT password_hash,password_salt FROM members WHERE phone=?').get('0912345678');assert.notEqual(stored.password_hash,register().password);assert.ok(stored.password_salt.length>=16);
+ const stored=db.prepare('SELECT password_hash,password_salt FROM members WHERE phone=?').get('0912345678');assert.notEqual(stored.password_hash,register().phone);assert.ok(stored.password_salt.length>=16);
  globalThis.memberCookie=cookieOf(r);
  assert.equal((await send('/api/member/me','GET',null,{'Cookie':globalThis.memberCookie})).data.member.displayName,'Lê Thanh Bình');
  assert.equal((await send('/api/member/register','POST',register())).status,409);
  assert.equal((await send('/api/member/login','POST',{phone:'0912345678',password:'wrong-password'})).status,401);
- const login=await send('/api/member/login','POST',{phone:'+84912345678',password:register().password});assert.equal(login.status,200);globalThis.memberCookie=cookieOf(login);
+ const login=await send('/api/member/login','POST',{phone:'+84912345678',password:register().phone});assert.equal(login.status,200);globalThis.memberCookie=cookieOf(login);
  assert.equal((await send('/api/member/logout','POST',{}, {'Cookie':globalThis.memberCookie})).status,200);
  assert.equal((await send('/api/member/me','GET',null,{'Cookie':globalThis.memberCookie})).data.member,null);
- const again=await send('/api/member/login','POST',{phone:'0912345678',password:register().password});globalThis.memberCookie=cookieOf(again);
+ const again=await send('/api/member/login','POST',{phone:'0912345678',password:register().phone});globalThis.memberCookie=cookieOf(again);
 });
 await test('vouchers start disabled, member-only eligibility and authoritative discount',async()=>{
  const hidden=await send('/api/vouchers');assert.equal(hidden.data.vouchers.length,0);

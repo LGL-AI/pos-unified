@@ -1,3 +1,4 @@
+import {applyCurrentSchema} from './helpers/schema.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
@@ -6,7 +7,7 @@ import worker from '../src/worker.js';
 import {daily} from '../src/reports.js';
 
 test('daily export allocates split bills and next-day refund to their Vietnam calendar days',async()=>{
- const db=new DatabaseSync(':memory:');for(const n of ['0001_initial.sql','0002_customer_members_vouchers.sql','0003_pos_cloud.sql','0004_loyalty_points.sql','0005_inventory_refunds_roles.sql','0006_counter_display.sql','0007_counter_management.sql','0008_store_config.sql'])db.exec(readFileSync(new URL('../migrations/'+n,import.meta.url),'utf8'));
+ const db=new DatabaseSync(':memory:');applyCurrentSchema(db,{legacyMenu:true});
  const DB={prepare(sql){let values=[];return{bind(...v){values=v;return this},async first(){return db.prepare(sql).get(...values)||null},async all(){return{results:db.prepare(sql).all(...values)}},async run(){return{meta:{changes:db.prepare(sql).run(...values).changes}}},_run(){return db.prepare(sql).run(...values)}}},async batch(items){db.exec('BEGIN');try{const r=items.map(x=>x._run());db.exec('COMMIT');return r}catch(e){db.exec('ROLLBACK');throw e}}};
  const env={DB,SESSION_SECRET:'rollover-test-secret-aabbccddeeff00112233',POS_STAFF_PASSWORD:'rollover-password-123456',ORDERING_ENABLED:'true'};
  const ask=async(path,method='GET',body,token='')=>{const r=await worker.fetch(new Request('https://rollover.test'+path,{method,headers:{Origin:'https://rollover.test',...(token?{Authorization:'Bearer '+token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined}),env);return {status:r.status,...await r.json()}};

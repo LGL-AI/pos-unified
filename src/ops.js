@@ -37,13 +37,18 @@ export async function loginActor(env,username,password,deps){
 }
 
 export async function catalogInventory(env,base){
+ const estimateMode=!!(await env.DB.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name='pos_inventory_estimates'").first());
+ const modifierMode=!!(await env.DB.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name='pos_product_modifiers'").first());
+ const modifierRows=modifierMode?(await env.DB.prepare('SELECT m.product_id,m.group_code,m.min_select,m.max_select,o.option_code,o.option_vi,o.option_zh,o.price_delta FROM pos_product_modifiers m JOIN pos_menu_options o ON o.group_code=m.group_code ORDER BY m.product_id,m.group_code,o.option_code').all()).results:[];
+ const modifierByProduct=new Map();
+ for(const row of modifierRows){let groups=modifierByProduct.get(row.product_id);if(!groups){groups=[];modifierByProduct.set(row.product_id,groups)}let group=groups.find(x=>x.code===row.group_code);if(!group){group={code:row.group_code,min:row.min_select,max:row.max_select,options:[]};groups.push(group)}group.options.push({code:row.option_code,name:row.option_vi,nameCn:row.option_zh,priceDelta:row.price_delta})}
  const {results:products=[]}=await env.DB.prepare('SELECT * FROM pos_products ORDER BY id').all();
  const {results=[]}=await env.DB.prepare(`SELECT p.product_id,p.stock,p.min_stock,
-  COALESCE(MIN(CASE WHEN i.stock>=r.qty THEN 1 ELSE 0 END),1) AS ingredients_ok
+  COALESCE(MIN(CASE WHEN r.ingredient_id IS NULL THEN 1 WHEN i.stock>=r.qty THEN 1 ELSE 0 END),1) AS ingredients_ok
   FROM pos_product_inventory p LEFT JOIN pos_recipes r ON r.product_id=p.product_id
   LEFT JOIN pos_ingredients i ON i.id=r.ingredient_id GROUP BY p.product_id`).all();
  const byId=new Map(results.map(x=>[x.product_id,x]));
- return {...base,products:products.map(row=>{const q=byId.get(row.id);return {id:row.id,sku:row.sku,name:row.name,nameCn:row.name_cn,category:row.category,station:row.station,price:row.price,largePrice:row.large_price,active:!!row.active,icon:row.icon,size:!!row.size,spicy:!!row.spicy,version:row.version,available:!!(row.active&&q?.stock>0&&q.ingredients_ok),stock:q?.stock??0,lowStock:!!q&&q.stock<=q.min_stock}})};
+ return {...base,products:products.map(row=>{const q=byId.get(row.id);return {id:row.id,sku:row.sku,name:row.name,nameCn:row.name_cn,category:row.category,categoryCn:row.category_zh||'',sizeLabel:row.size_label||'ONE',itemNote:row.item_note||'',sourceImage:row.source_image||'',bestSeller:!!row.best_seller,modifiers:modifierByProduct.get(row.id)||[],station:row.station,price:row.price,largePrice:row.large_price,active:!!row.active,icon:row.icon,size:!!row.size,spicy:!!row.spicy,version:row.version,available:!!(row.active&&(estimateMode||q?.stock>0&&q.ingredients_ok)),stock:q?.stock??0,lowStock:!!q&&q.stock<=q.min_stock}})};
 }
 
 function permissionList(value){if(!Array.isArray(value)||value.length>VALID.length||value.some(x=>!VALID.includes(x))||new Set(value).size!==value.length)throw Error('INVALID_PERMISSIONS');return value}
@@ -51,13 +56,15 @@ const deny=()=>bad(403,'PERMISSION_DENIED','Tài khoản không có quyền th�
 const errors={INVALID_PERMISSIONS:'Danh sách quyền không hợp lệ',INVALID_ROLE:'Vai trò không hợp lệ',INVALID_STAFF:'Thông tin nhân viên không hợp lệ',INVALID_STOCK:'Số lượng hoặc loại kho không hợp lệ',INVALID_PLAN:'Lịch nhập hàng không hợp lệ',INVALID_REFUND:'Thông tin hoàn tiền không hợp lệ',REQUEST_ID_REUSED:'Mã yêu cầu đã dùng cho thay đổi khác',OUT_OF_STOCK:'Sản phẩm hết hàng',INGREDIENT_OUT_OF_STOCK:'Nguyên liệu không đủ',STOCK_CANNOT_BE_NEGATIVE:'Không thể trừ tồn kho xuống âm',PLAN_CHANGED:'Lịch nhập đã xử lý hoặc số lượng đã đổi',REFUND_EXCEEDS_PAID:'Số tiền hoàn vượt tiền đã thu',REFUND_EXCEEDS_BILL:'Số tiền hoàn vượt bill đã thu',REFUND_BILL_REQUIRED:'Đơn tách bill phải chọn bill đã thanh toán',REFUND_BILL_INVALID:'Bill không thuộc đơn',ORDER_NOT_PAID:'Chỉ hoàn đơn đã thanh toán',REFUND_STOCK_EXCEEDS_SOLD:'Số phần nhập lại vượt số phần đã bán',INVALID_ADJUSTMENT:'Loại điều chỉnh kho không hợp lệ'};
 function opError(e){const code=e?.message||'';if(errors[code])return bad(['INVALID_PERMISSIONS','INVALID_ROLE','INVALID_STAFF','INVALID_STOCK','INVALID_PLAN','INVALID_REFUND'].includes(code)?400:409,code,errors[code]);if(/UNIQUE|constraint|FOREIGN KEY/i.test(code))return bad(409,'CONFLICT','Dữ liệu vừa được thay đổi hoặc đã tồn tại');console.error('POS operations:',code);return bad(503,'SERVICE_UNAVAILABLE','Máy chủ tạm gián đoạn; kiểm tra dữ liệu trước khi thử lại')}
 async function inventory(env){
- const [products,ingredients,recipes,movements,plans]=await Promise.all([
+ const migrated=await env.DB.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name='pos_inventory_estimates'").first();
+ const [products,ingredients,recipes,movements,plans,estimates]=await Promise.all([
   env.DB.prepare('SELECT * FROM pos_product_inventory ORDER BY product_id').all(),
   env.DB.prepare('SELECT * FROM pos_ingredients ORDER BY sku').all(),
   env.DB.prepare('SELECT * FROM pos_recipes ORDER BY product_id,ingredient_id').all(),
   env.DB.prepare('SELECT * FROM pos_inventory_movements ORDER BY created_at DESC LIMIT 60').all(),
-  env.DB.prepare('SELECT * FROM pos_restock_plans ORDER BY due_date ASC LIMIT 60').all()]);
- return ok({products:products.results,ingredients:ingredients.results,recipes:recipes.results,movements:movements.results,plans:plans.results});
+  env.DB.prepare('SELECT * FROM pos_restock_plans ORDER BY due_date ASC LIMIT 60').all(),
+  migrated?env.DB.prepare("SELECT target,ref_id,estimated_stock FROM pos_inventory_estimates ORDER BY target,ref_id").all():Promise.resolve({results:[]})]);
+ return ok({products:products.results,ingredients:ingredients.results,recipes:recipes.results,movements:movements.results,plans:plans.results,estimates:estimates.results});
 }
 function staffPublic(u){return{id:u.id,username:u.username,name:u.display_name,role:u.role_id,active:!!u.active}}
 export async function handleOps(req,env,actor,deps){
@@ -95,7 +102,8 @@ export async function handleOps(req,env,actor,deps){
    if(!allowed(actor,'REFUND_VIEW'))return deny();const id=new URL(req.url).searchParams.get('orderId');if(!uuid(id))throw Error('INVALID_REFUND');
    const {results=[]}=await env.DB.prepare('SELECT * FROM pos_refunds WHERE order_id=? ORDER BY created_at DESC').bind(id).all();
    const {results:items=[]}=await env.DB.prepare('SELECT x.* FROM pos_refund_items x JOIN pos_refunds r ON r.id=x.refund_id WHERE r.order_id=?').bind(id).all();
-   return ok({refunds:results.map(r=>({...r,restockItems:items.filter(x=>x.refund_id===r.id).map(x=>({productId:x.product_id,quantity:x.qty}))}))});
+   const {results:lines=[]}=await env.DB.prepare('SELECT l.* FROM pos_refund_line_items l JOIN pos_refunds r ON r.id=l.refund_id WHERE r.order_id=?').bind(id).all();
+   return ok({refunds:results.map(r=>({...r,restockItems:items.filter(x=>x.refund_id===r.id).map(x=>({productId:x.product_id,quantity:x.qty})),lineItems:lines.filter(x=>x.refund_id===r.id).map(x=>({productId:x.product_id,name:x.product_name,quantity:x.qty,amount:x.amount,category:x.category}))}))});
   }
   if(path==='/api/staff/refunds'&&method==='POST'){
    if(!allowed(actor,'REFUND_CREATE'))return deny();const b=await deps.body(req),orderId=b.orderId,billId=b.billId||null,
@@ -104,12 +112,18 @@ export async function handleOps(req,env,actor,deps){
    if(restock.length&&(!allowed(actor,'INVENTORY_MANAGE')||b.confirmRestock!==true))return deny();
    if(restock.some(x=>!x||!integer(x.quantity)||!/^[A-Za-z0-9_-]{1,24}$/.test(String(x.productId)))||new Set(restock.map(x=>String(x.productId))).size!==restock.length)throw Error('INVALID_REFUND');
    const normalized=restock.map(x=>({productId:String(x.productId),quantity:x.quantity})).sort((a,b)=>a.productId.localeCompare(b.productId));
-   const fingerprint=await deps.sha(JSON.stringify({orderId,billId,amount:b.amount,reason,method,restock:normalized}));
+   const row=billId?await env.DB.prepare('SELECT items_json FROM pos_bills WHERE id=? AND order_id=?').bind(billId,orderId).first():await env.DB.prepare('SELECT items_json FROM qr_orders WHERE id=?').bind(orderId).first();
+   const sold=new Map();for(const x of row?JSON.parse(row.items_json):[]){const key=String(x.productId),previous=sold.get(key);sold.set(key,{name:x.name,qty:(previous?.qty||0)+x.qty})}
+   const lineItems=Array.isArray(b.lineItems)?b.lineItems:[];
+   if(lineItems.length>20||lineItems.some(x=>!x||!['RETURNED','COMPENSATED'].includes(x.category)||!integer(x.quantity)||!Number.isSafeInteger(x.amount)||x.amount<0||!sold.has(String(x.productId)))||new Set(lineItems.map(x=>x.productId+':'+x.category)).size!==lineItems.length||lineItems.reduce((n,x)=>n+x.amount,0)>b.amount)throw Error('INVALID_REFUND');
+   const lines=lineItems.map(x=>({productId:String(x.productId),name:sold.get(String(x.productId)).name,quantity:x.quantity,amount:x.amount,category:x.category})).sort((a,b)=>(a.productId+a.category).localeCompare(b.productId+b.category));
+   const fingerprint=await deps.sha(JSON.stringify({orderId,billId,amount:b.amount,reason,method,restock:normalized,lines}));
    const prior=await env.DB.prepare('SELECT * FROM pos_refunds WHERE idem_key=?').bind(idem).first();
    if(prior)return prior.fingerprint===fingerprint?ok({refund:prior,duplicate:true}):bad(409,'REQUEST_ID_REUSED','Mã giao dịch đã dùng cho khoản hoàn khác');
+   for(const line of lines){const used=await env.DB.prepare('SELECT COALESCE(SUM(l.qty),0) AS qty FROM pos_refund_line_items l JOIN pos_refunds r ON r.id=l.refund_id WHERE r.order_id=? AND COALESCE(r.bill_id,\'\')=COALESCE(?,\'\') AND l.product_id=?').bind(orderId,billId,line.productId).first();if(used.qty+lines.filter(x=>x.productId===line.productId).reduce((n,x)=>n+x.quantity,0)>sold.get(line.productId).qty)throw Error('INVALID_REFUND')}
    const id=crypto.randomUUID(),time=now();
    const statements=[env.DB.prepare('INSERT INTO pos_refunds(id,idem_key,fingerprint,order_id,bill_id,amount,reason,method,actor_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(idem_key) DO NOTHING')
-    .bind(id,idem,fingerprint,orderId,billId,b.amount,reason,method,actor.id,time),...normalized.map(x=>env.DB.prepare('INSERT INTO pos_refund_items(refund_id,product_id,qty) VALUES(?,?,?)').bind(id,x.productId,x.quantity))];
+    .bind(id,idem,fingerprint,orderId,billId,b.amount,reason,method,actor.id,time),...normalized.map(x=>env.DB.prepare('INSERT INTO pos_refund_items(refund_id,product_id,qty) VALUES(?,?,?)').bind(id,x.productId,x.quantity)),...lines.map(x=>env.DB.prepare('INSERT INTO pos_refund_line_items(refund_id,product_id,product_name,qty,amount,category) VALUES(?,?,?,?,?,?)').bind(id,x.productId,x.name,x.quantity,x.amount,x.category))];
    await env.DB.batch(statements);
    const saved=await env.DB.prepare('SELECT * FROM pos_refunds WHERE idem_key=?').bind(idem).first();
    if(!saved)return bad(503,'REFUND_NOT_SAVED','Chưa ghi được khoản hoàn');

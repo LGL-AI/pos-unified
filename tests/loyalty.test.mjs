@@ -1,3 +1,4 @@
+import {applyCurrentSchema} from './helpers/schema.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -6,7 +7,7 @@ import worker from '../src/worker.js';
 
 function setup(){
  const db=new DatabaseSync(':memory:');
- for(const n of ['0001_initial.sql','0002_customer_members_vouchers.sql','0003_pos_cloud.sql','0004_loyalty_points.sql','0005_inventory_refunds_roles.sql','0006_counter_display.sql','0007_counter_management.sql','0008_store_config.sql'])db.exec(readFileSync(new URL('../migrations/'+n,import.meta.url),'utf8'));db.exec('UPDATE pos_product_inventory SET stock=100; UPDATE pos_ingredients SET stock=100000;');
+ applyCurrentSchema(db,{legacyMenu:true});db.exec('UPDATE pos_product_inventory SET stock=100; UPDATE pos_ingredients SET stock=100000;');
  const DB={prepare(sql){let args=[];return{bind(...v){args=v;return this},async first(){return db.prepare(sql).get(...args)||null},async all(){return{results:db.prepare(sql).all(...args)}},async run(){return{meta:{changes:db.prepare(sql).run(...args).changes}}},_run(){return db.prepare(sql).run(...args)}}},async batch(statements){db.exec('BEGIN');try{const result=statements.map(s=>s._run());db.exec('COMMIT');return result}catch(e){db.exec('ROLLBACK');throw e}}};
  const env={DB,ASSETS:{fetch:async()=>new Response('',{status:404})},ORDERING_ENABLED:'true',SESSION_SECRET:'loyalty-test-secret-0123456789abcdef0123456789',POS_STAFF_PASSWORD:'654321',BANK_BIN:'970448',BANK_ACCOUNT_NUMBER:'609271',BANK_ACCOUNT_NAME:'HUANG TIANSHENG'};
  const send=async(path,method='GET',data,headers={})=>{const h={Origin:'https://pos-unified.test',...headers};if(data!==undefined)h['Content-Type']='application/json';const response=await worker.fetch(new Request('https://pos-unified.test'+path,{method,headers:h,body:data===undefined?undefined:JSON.stringify(data)}),env);return{status:response.status,data:await response.json(),cookie:response.headers.get('set-cookie')?.split(';')[0]}};
@@ -27,17 +28,18 @@ test('member earns only on staff-confirmed QR payment; voucher reduces points an
  const profile=()=>db.prepare('SELECT points,spend,orders,last_visit FROM members WHERE id=?').get(id);
  assert.equal(ledger().length,0);
  const accepted=await send('/api/staff/orders/'+q.data.order.id+'/accept','POST',{version:q.data.order.version},auth);
- const reported=await send('/api/orders/'+q.data.order.id+'/reported','POST',{}, {'x-order-token':q.data.orderToken});assert.equal(reported.data.order.paymentStatus,'CUSTOMER_REPORTED');assert.equal(profile().points,90);assert.equal(ledger().length,0);
- const paid=await send('/api/staff/orders/'+q.data.order.id+'/pay','POST',{version:reported.data.order.version,method:'BANK'},auth);
+ assert.equal(accepted.data.jobs.length,0);assert.equal((await send('/api/orders/'+q.data.order.id+'/reported','POST',{}, {'x-order-token':q.data.orderToken})).status,404);
+ assert.equal(profile().points,90);assert.equal(ledger().length,0);
+ const paid=await send('/api/staff/orders/'+q.data.order.id+'/pay','POST',{version:accepted.data.order.version,method:'BANK'},auth);
  assert.equal(paid.status,200,JSON.stringify(paid.data));assert.equal(paid.data.order.pointsEarned,24);
  assert.deepEqual([profile().points,profile().spend,profile().orders],[114,690000,3]);assert.equal(profile().last_visit.length,10);
  assert.equal(ledger()[0].order_id,q.data.order.id);assert.equal(ledger()[0].points,24);
- assert.equal((await send('/api/staff/orders/'+q.data.order.id+'/pay','POST',{version:reported.data.order.version,method:'BANK'},auth)).status,409);
+ assert.equal((await send('/api/staff/orders/'+q.data.order.id+'/pay','POST',{version:accepted.data.order.version,method:'BANK'},auth)).status,409);
  assert.equal(ledger().length,1);
  const me=await send('/api/member/me','GET',undefined,cookie);assert.equal(me.data.member.tier,'Silver');assert.equal(me.data.member.pointsSynced,true);
  assert.equal((await send('/api/member/loyalty')).status,401);
  const history=await send('/api/member/loyalty','GET',undefined,cookie);assert.equal(history.data.transactions.length,1);assert.deepEqual([history.data.transactions[0].points,history.data.transactions[0].amount],[24,240000]);
- assert.equal(accepted.data.jobs.length,1);
+ assert.equal(paid.data.jobs.length,1);
 });
 
 test('four-way split earns parent-order points once after final bill; guest gets none',async()=>{

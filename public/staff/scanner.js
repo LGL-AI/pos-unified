@@ -9,8 +9,8 @@
   code=code.toUpperCase();
   if(/^T\d{1,2}$/.test(code)&&!/^T(?:0?[1-9]|[1-9]\d)$/.test(code))return null;
   if(/^T(?:0?[1-9]|[1-9]\d)$/.test(code)||code==='TAKEAWAY')return {kind:'TABLE',value:code};
-  if(/^PT-\d{6}-[A-F0-9]{8}(?:[A-F0-9]{0,4}|-[A-F0-9]{1,4})$/.test(code))return {kind:'ORDER',value:code};
-  if(/^0\d{9}$/.test(code))return {kind:'MEMBER',value:code};
+  if(/^(?:\d{8}-\d{4,}-[A-F0-9]{6}-(?:CK|TM)(?:-?B[1-9]\d*)?|PT-\d{6}-[A-F0-9]{8}(?:[A-F0-9]{0,4}|-[A-F0-9]{1,4}))$/.test(code))return {kind:'ORDER',value:code};
+  if(/^0\d{9,10}$/.test(code))return {kind:'MEMBER',value:code};
   if(/^[A-Z0-9][A-Z0-9_-]{1,47}$/.test(code))return {kind:'SKU',value:code};
   return null;
  }

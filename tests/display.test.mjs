@@ -1,3 +1,4 @@
+import {applyCurrentSchema} from './helpers/schema.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -6,7 +7,7 @@ import worker from '../src/worker.js';
 
 test('four UI routes share the same Worker; paired display reads only server-calculated D1 snapshots',async()=>{
  const db=new DatabaseSync(':memory:');
- for(const n of ['0001_initial.sql','0002_customer_members_vouchers.sql','0003_pos_cloud.sql','0004_loyalty_points.sql','0005_inventory_refunds_roles.sql','0006_counter_display.sql','0007_counter_management.sql','0008_store_config.sql'])db.exec(readFileSync(new URL('../migrations/'+n,import.meta.url),'utf8'));
+ applyCurrentSchema(db,{legacyMenu:true});
  db.exec('UPDATE pos_product_inventory SET stock=100; UPDATE pos_ingredients SET stock=100000;');
  const DB={prepare(sql){let args=[];return{bind(...v){args=v;return this},async first(){return db.prepare(sql).get(...args)||null},async all(){return{results:db.prepare(sql).all(...args)}},async run(){return{meta:{changes:db.prepare(sql).run(...args).changes}}},_run(){return db.prepare(sql).run(...args)}}},async batch(q){db.exec('BEGIN');try{const r=q.map(x=>x._run());db.exec('COMMIT');return r}catch(e){db.exec('ROLLBACK');throw e}}};
  const env={DB,ORDERING_ENABLED:'true',SESSION_SECRET:'display-test-0123456789abcdef0123456789',POS_STAFF_PASSWORD:'test-staff-password-123456',BANK_BIN:'970448',BANK_ACCOUNT_NUMBER:'609271',BANK_ACCOUNT_NAME:'HUANG TIANSHENG',ASSETS:{fetch:async(req)=>new Response(new URL(req.url).pathname,{headers:{'Content-Type':'text/html'}})}};
@@ -14,7 +15,7 @@ test('four UI routes share the same Worker; paired display reads only server-cal
  for(const p of ['/counter/','/display/','/staff/','/qr/?table=T01'])assert.equal((await ask(p)).status,200,p);
  assert.match((await ask('/counter/')).headers.get('Content-Security-Policy'),/http:\/\/127\.0\.0\.1:18181/);
  assert.doesNotMatch((await ask('/qr/')).headers.get('Content-Security-Policy'),/127\.0\.0\.1/);
- const health=await ask('/api/health');assert.equal(health.data.version,'2.5.0');assert.equal(health.data.display,'ok');assert.equal(health.data.acceptingOrders,true);
+ const health=await ask('/api/health');assert.equal(health.data.version,'2.6.0-rc.4');assert.equal(health.data.display,'ok');assert.equal(health.data.acceptingOrders,true);
  assert.equal((await ask('/api/staff/display','POST',{})).status,401);
  const login=await ask('/api/staff/login','POST',{username:'huang',password:env.POS_STAFF_PASSWORD}),auth={Authorization:'Bearer '+login.data.token};assert.equal(login.status,200);
  const paired=await ask('/api/staff/display','POST',{},auth);assert.equal(paired.status,201);

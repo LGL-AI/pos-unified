@@ -1,0 +1,117 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {DatabaseSync} from 'node:sqlite';
+import {readFileSync,readdirSync} from 'node:fs';
+import {runInNewContext} from 'node:vm';
+import worker from '../src/worker.js';
+
+function setup(){
+ const db=new DatabaseSync(':memory:');
+ for(const n of readdirSync(new URL('../migrations/',import.meta.url)).filter(x=>x.endsWith('.sql')).sort())db.exec(readFileSync(new URL('../migrations/'+n,import.meta.url),'utf8'));
+ const DB={prepare(sql){let args=[];return {bind(...values){args=values;return this},async first(){return db.prepare(sql).get(...args)||null},async all(){return {results:db.prepare(sql).all(...args)}},async run(){return {meta:{changes:db.prepare(sql).run(...args).changes}}},_run(){return db.prepare(sql).run(...args)}}},async batch(items){db.exec('BEGIN');try{const result=items.map(x=>x._run());db.exec('COMMIT');return result}catch(e){db.exec('ROLLBACK');throw e}}};
+ const env={DB,ASSETS:{fetch:async()=>new Response('',{status:404})},ORDERING_ENABLED:'true',ALLOW_UNVERIFIED_MEMBER_VOUCHERS:'true',SESSION_SECRET:'echo-test-secret-0123456789abcdef',POS_STAFF_PASSWORD:'123456'};
+ const call=async(path,method='GET',data,token)=>{const response=await worker.fetch(new Request('https://echo.test'+path,{method,headers:{Origin:'https://echo.test',...(data===undefined?{}:{'Content-Type':'application/json'}),...(token?{Authorization:'Bearer '+token}:{})},body:data===undefined?undefined:JSON.stringify(data)}),env);return {status:response.status,...await response.json()}};
+ const post=(path,data,token)=>call(path,'POST',data,token);
+ return {db,env,call,post};
+}
+const day=offset=>{const now=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Ho_Chi_Minh',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());return new Date(Date.parse(now+'T00:00:00Z')+offset*86400000).toISOString().slice(0,10)};
+
+test('Echo menu: exact SKU, D1 option validation, server price, paid dashboard and logo',async()=>{
+ const {db,call,post}=setup(),owner=(await post('/api/staff/login',{username:'huang',password:'123456'})).token;
+ const catalog=(await call('/api/catalog')).catalog;
+ const health=await call('/api/health');assert.equal(health.echoReady,true);
+ assert.equal(catalog.products.filter(x=>x.id.startsWith('EC_')).length,85);
+ assert.equal(catalog.store.name,'Echo Coffee');
+ assert.equal(db.prepare("SELECT count(*) AS n FROM pos_products WHERE id LIKE '10_' AND active=1").get().n,0);
+ const combo=catalog.products.find(x=>x.sku==='MAIN013');
+ assert.equal(combo.modifiers.length,2);
+ const missing=await post('/api/staff/orders',{table:'T01',items:[{productId:combo.id,qty:1}],idempotencyKey:crypto.randomUUID()},owner);
+ assert.equal(missing.code,'INVALID_MODIFIERS');
+ const item={productId:combo.id,qty:1,mods:{options:{COMBO_RICE_MAIN:['R01'],COMBO_RICE_DRINK:['D02']}}};
+ const placed=await post('/api/staff/orders',{table:'T01',items:[item],idempotencyKey:crypto.randomUUID()},owner);
+ assert.equal(placed.status,201,JSON.stringify(placed));
+ assert.equal(placed.order.subtotal,120000);
+ assert.equal(placed.order.items[0].mods.options.COMBO_RICE_DRINK[0].name,'Trà táo size nhỏ');
+ const tea=catalog.products.find(x=>x.sku==='FRUIT001-M');
+ assert.ok(tea.modifiers.find(g=>g.code==='DRINK_TOPPING'));
+ const priced=await post('/api/staff/orders',{table:'T01',items:[{productId:tea.id,qty:2,price:1,mods:{options:{DRINK_TOPPING:['T01','T03']}}}],idempotencyKey:crypto.randomUUID()},owner);
+ assert.equal(priced.status,201,JSON.stringify(priced));
+ assert.equal(priced.order.items[0].price,tea.price+26000);
+ assert.equal(priced.order.subtotal,(tea.price+26000)*2);
+ const paid=await post('/api/staff/orders/'+placed.order.id+'/pay',{version:placed.order.version,method:'CASH',received:120000},owner);
+ assert.equal(paid.status,200,JSON.stringify(paid));
+ const analytics=await call('/api/staff/reports/analytics?date='+day(0),'GET',undefined,owner);
+ assert.equal(analytics.status,200,JSON.stringify(analytics));
+ assert.equal(analytics.analytics.report.gross,120000);
+ assert.equal(analytics.analytics.hours.reduce((n,x)=>n+x.net,0),120000);
+ assert.equal(analytics.analytics.history.at(-1).net,120000);
+ assert.ok(analytics.analytics.topProducts.some(x=>x.sku==='MAIN013'));
+ const redirect=await worker.fetch(new Request('https://echo.test/api/store/logo'),{...((()=>{const DB={prepare:sql=>({first:async()=>db.prepare(sql).get()})};return {DB}})())});
+ assert.equal(redirect.status,302);
+ assert.equal(redirect.headers.get('location'),'/brands/echo-coffee.jpg');
+ db.close();
+});
+
+test('shift child flows persist, prevent duplicates and enforce roster, leave and attendance constraints',async()=>{
+ const {db,call,post}=setup(),owner=(await post('/api/staff/login',{username:'huang',password:'123456'})).token;
+ const created=await post('/api/staff/accounts',{username:'echo_shift_cashier',name:'Thu ngân Echo',password:'cashier-secret-123',role:'CASHIER'},owner);
+ const second=await post('/api/staff/accounts',{username:'echo_shift_second',name:'Nhân viên thứ hai',password:'cashier-secret-456',role:'CASHIER'},owner);
+ assert.equal(created.status,201,JSON.stringify(created));assert.equal(second.status,201,JSON.stringify(second));
+ const staff=created.account.id,other=second.account.id,token=(await post('/api/staff/login',{username:'echo_shift_cashier',password:'cashier-secret-123'})).token;
+ const otherToken=(await post('/api/staff/login',{username:'echo_shift_second',password:'cashier-secret-456'})).token;
+ const tomorrow=day(1),later=day(2),url='/api/staff/shift-ops/';
+ const delivery={requestKey:crypto.randomUUID(),supplier:'NCC cà phê',dueDate:tomorrow,dueTime:'09:30',shiftName:'MORNING',receiverId:staff,items:'Cà phê nhân 5kg'};
+ const createdDelivery=await post(url+'delivery',delivery,owner);
+ assert.equal(createdDelivery.status,201,JSON.stringify(createdDelivery));
+ assert.equal((await post(url+'delivery',delivery,owner)).duplicate,true);
+ assert.equal((await post(url+'delivery',{...delivery,items:'Khác'},owner)).status,409);
+ const receive=await post(url+'delivery/'+createdDelivery.id+'/status',{status:'RECEIVED',note:'Đủ 5kg, còn niêm phong',version:1},token);
+ assert.equal(receive.status,200,JSON.stringify(receive));
+ assert.equal((await post(url+'delivery/'+createdDelivery.id+'/status',{status:'RECEIVED',note:'Lặp',version:1},token)).status,409);
+ const rota=await post('/api/staff/schedules',{staffId:staff,workDate:tomorrow,startTime:'08:00',endTime:'12:00'},owner);
+ assert.equal(rota.status,201,JSON.stringify(rota));
+ const leave=await post(url+'leave',{requestKey:crypto.randomUUID(),fromDate:tomorrow,toDate:tomorrow,leaveType:'ANNUAL',reason:'Việc riêng'},token);
+ assert.equal(leave.status,201,JSON.stringify(leave));
+ assert.equal((await post(url+'leave/'+leave.id+'/status',{status:'APPROVED',version:1},owner)).code,'LEAVE_SCHEDULE_CONFLICT');
+ assert.throws(()=>db.prepare("UPDATE pos_leave_requests SET status='APPROVED' WHERE id=?").run(leave.id),/LEAVE_SCHEDULE_CONFLICT/);
+ const swap=await post(url+'swap',{requestKey:crypto.randomUUID(),scheduleId:rota.id,toStaffId:other,reason:'Đổi ca làm'},token);
+ assert.equal(swap.status,201,JSON.stringify(swap));
+ assert.equal((await post(url+'swap/'+swap.id+'/status',{status:'APPROVED',version:1},owner)).status,403);
+ assert.equal((await post(url+'swap/'+swap.id+'/status',{status:'ACCEPTED',version:1},otherToken)).status,200);
+ assert.equal((await post(url+'swap/'+swap.id+'/status',{status:'APPROVED',version:2},owner)).status,200);
+ assert.equal(db.prepare('SELECT staff_id FROM pos_shift_schedules WHERE id=?').get(rota.id).staff_id,other);
+ assert.equal((await post(url+'leave/'+leave.id+'/status',{status:'APPROVED',version:1},owner)).status,200);
+ assert.equal((await post('/api/staff/schedules',{staffId:staff,workDate:tomorrow,startTime:'11:00',endTime:'12:00'},owner)).status,409);
+ const task=await post(url+'task',{requestKey:crypto.randomUUID(),titleVi:'Kiểm tra máy pha',titleZh:'检查咖啡机',workDate:later,phase:'OPEN',assigneeId:staff,dueTime:'09:00',priority:'HIGH'},owner);
+ assert.equal(task.status,201,JSON.stringify(task));
+ assert.equal((await post(url+'task/'+task.id+'/status',{status:'DONE',version:1},token)).status,200);
+ const ot=await post(url+'ot',{requestKey:crypto.randomUUID(),workDate:later,startTime:'19:00',endTime:'20:00',reason:'Đóng cửa muộn'},token);
+ assert.equal(ot.status,201,JSON.stringify(ot));
+ assert.equal((await post(url+'ot/'+ot.id+'/status',{status:'APPROVED',version:1},owner)).status,200);
+ const handover=await post(url+'handover',{requestKey:crypto.randomUUID(),toStaffId:staff,pendingWork:'Kiểm tra kệ',stockNote:'Còn 5kg',equipmentNote:'Máy hoạt động'},owner);
+ assert.equal(handover.status,201,JSON.stringify(handover));
+ assert.equal((await post(url+'handover/'+handover.id+'/status',{status:'ACKNOWLEDGED'},token)).status,200);
+ const attendance=await post('/api/staff/attendance/in',{},token);
+ assert.equal(attendance.status,201,JSON.stringify(attendance));
+ assert.equal((await post('/api/staff/attendance/out',{},token)).status,200);
+ const correct=await post(url+'correction',{requestKey:crypto.randomUUID(),staffId:staff,workDate:day(0),clockIn:'08:00',clockOut:'12:00',reason:'Theo biên bản kiểm tra'},owner);
+ assert.equal(correct.status,201,JSON.stringify(correct));
+ assert.equal(db.prepare('SELECT clock_in,clock_out FROM pos_attendance WHERE id=?').get(attendance.id).clock_in,new Date(day(0)+'T08:00:00+07:00').toISOString());
+ const list=await call('/api/staff/shift-ops?from='+day(0)+'&to='+later,'GET',undefined,owner);
+ assert.equal(list.status,200,JSON.stringify(list));
+ assert.equal(list.deliveries[0].status,'RECEIVED');assert.equal(list.tasks[0].status,'DONE');assert.equal(list.swaps[0].status,'APPROVED');assert.equal(list.corrections.length,1);
+ db.close();
+});
+
+test('eight shift panels and bar, donut, forecast render from D1-shaped data',()=>{
+ const context={window:{},Intl,Date,Number,Math,Object,Array,Set,String};
+ runInNewContext(readFileSync(new URL('../public/counter/shift-ui.js',import.meta.url),'utf8'),context);
+ runInNewContext(readFileSync(new URL('../public/counter/analytics.js',import.meta.url),'utf8'),context);
+ const {LotusShiftUI,LotusCounterAnalytics}=context.window;
+ assert.equal(LotusShiftUI.tabs.length,8);
+ const st={staff:{id:'OWNER',name:'Chủ cửa hàng'},shiftFrom:day(0),opsFrom:day(0),opsTo:day(7),shiftOps:{deliveries:[],leave:[],tasks:[],ot:[],swaps:[],handovers:[],corrections:[],cash:[]},schedules:[],attendance:[],scheduleStaff:[],cashShift:null};
+ const h={esc:x=>String(x??''),fmt:x=>String(x)+' đ',date:x=>String(x),can:()=>true,weekBoard:()=>'<div>Lịch 7 ngày</div>'};
+ for(const [tab] of LotusShiftUI.tabs){st.shiftTab=tab;const html=LotusShiftUI.render(st,h);assert.match(html,/class="shift-hub"/);assert.match(html,/D1 · LIVE/)}
+ const chart=LotusCounterAnalytics.render({report:{date:day(0),paidOrders:3,paidBills:3,gross:300000,refunded:10000,net:290000,tax:0,cash:180000,bank:120000,openOrders:1},hours:Array.from({length:24},(_,hour)=>({hour,gross:hour===8?300000:0,refunds:hour===9?10000:0,net:hour===8?300000:hour===9?-10000:0})),history:Array.from({length:7},(_,i)=>({date:day(i-6),net:i<3?10000*(i+1):0})),topProducts:[],shifts:{shifts:1,difference:0},attendance:{staff:1,checkIns:1}});
+ assert.match(chart,/class="hour-bars"/);assert.match(chart,/class="pay-donut"/);assert.match(chart,/class="forecast-svg"/);assert.match(chart,/stroke-dasharray="8 6"/);
+});

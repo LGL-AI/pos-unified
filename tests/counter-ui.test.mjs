@@ -1,3 +1,4 @@
+import {applyCurrentSchema} from './helpers/schema.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -6,21 +7,31 @@ import vm from 'node:vm';
 import worker from '../src/worker.js';
 
 test('desktop counter buttons pair the second screen and publish priced cart through D1',async()=>{
- const db=new DatabaseSync(':memory:');for(const n of ['0001_initial.sql','0002_customer_members_vouchers.sql','0003_pos_cloud.sql','0004_loyalty_points.sql','0005_inventory_refunds_roles.sql','0006_counter_display.sql','0007_counter_management.sql','0008_store_config.sql'])db.exec(readFileSync(new URL('../migrations/'+n,import.meta.url),'utf8'));
+ const db=new DatabaseSync(':memory:');applyCurrentSchema(db,{legacyMenu:true});
  db.exec('UPDATE pos_product_inventory SET stock=100; UPDATE pos_ingredients SET stock=100000;');
  const DB={prepare(sql){let a=[];return{bind(...v){a=v;return this},async first(){return db.prepare(sql).get(...a)||null},async all(){return{results:db.prepare(sql).all(...a)}},async run(){return{meta:{changes:db.prepare(sql).run(...a).changes}}},_run(){return db.prepare(sql).run(...a)}}},async batch(queries){db.exec('BEGIN');try{const r=queries.map(x=>x._run());db.exec('COMMIT');return r}catch(e){db.exec('ROLLBACK');throw e}}};
  const env={DB,ORDERING_ENABLED:'true',SESSION_SECRET:'ui-test-secret-aabbccddeeff00112233',POS_STAFF_PASSWORD:'counter-test-password',BANK_BIN:'970448',BANK_ACCOUNT_NUMBER:'609271',BANK_ACCOUNT_NAME:'HUANG TIANSHENG'};
- const app={innerHTML:''},connection={textContent:'',classList:{toggle(){}}},listeners={};let printNode=null,printed=0,exported=null;const devices=[];
+ const app={innerHTML:'',querySelector:()=>null},menuList={innerHTML:''},connection={textContent:'',classList:{toggle(){}}},listeners={};let printNode=null,printed=0,exported=null;const devices=[];
  const reportDay=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Ho_Chi_Minh',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
- const document={body:{dataset:{mode:'counter'},appendChild(node){if(node.id!=='download')printNode=node}},querySelector(s){return s==='#app'?app:s==='#connection'?connection:s==='#lotus-print-ticket'?printNode:s==='#report-day'?{value:reportDay}:null},createElement(tag){return tag==='a'?{id:'download',click(){},remove(){}}:{id:'',innerHTML:'',remove(){printNode=null}}},addEventListener(type,fn){listeners[type]=fn}};
+ const document={body:{dataset:{mode:'counter'},appendChild(node){if(node.id!=='download')printNode=node}},querySelector(s){return s==='#app'?app:s==='#connection'?connection:s==='#pos-menu-stock'?menuList:s==='#lotus-print-ticket'?printNode:s==='#report-day'?{value:reportDay}:null},querySelectorAll(){return []},createElement(tag){return tag==='a'?{id:'download',click(){},remove(){}}:{id:'',innerHTML:'',remove(){printNode=null}}},addEventListener(type,fn){listeners[type]=fn}};
  class BrowserURL extends URL{static createObjectURL(blob){exported=blob;return 'blob:report'}static revokeObjectURL(){}}
  const storage=new Map(),session=new Map(),context={document,location:{origin:'https://pos.test'},sessionStorage:{getItem:k=>session.get(k)||null,setItem:(k,v)=>session.set(k,v),removeItem:k=>session.delete(k)},localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},crypto,Response,Request,URL:BrowserURL,Blob,Intl,JSON,Number,Array,String,Math,Date,console,AbortSignal,clearTimeout,setTimeout:(fn,ms)=>ms>=30000?undefined:setTimeout(fn,ms),navigator:{},confirm:()=>true,prompt:(_,v)=>v??'',fetch:async(path,opts={})=>worker.fetch(new Request('https://pos.test'+path,{method:opts.method||'GET',headers:{Origin:'https://pos.test',...opts.headers},body:opts.body}),env)};
- context.window=context;context.print=()=>{printed++};context.LotusCounterDevices={send:async(job)=>{devices.push(job);return{ok:true,state:'SENT'}},receipt:()=>({width:8,height:8,bitmap:'AAAAAAAAAAA='}),labels:()=>[{width:8,height:8,bitmap:'AAAAAAAAAAA='}],status:async()=>({labelWidth:50,labelHeight:30}),token:()=>''};vm.createContext(context);vm.runInContext(readFileSync(new URL('../public/staff/qrcode.js',import.meta.url),'utf8'),context);vm.runInContext(readFileSync(new URL('../public/staff/staff.js',import.meta.url),'utf8'),context);
+ context.window=context;context.print=()=>{printed++};context.LotusPrintCodes={barcode:()=>({toDataURL:()=> 'data:image/png;base64,AAAA'}),qr:()=>({toDataURL:()=> 'data:image/png;base64,AAAA'})};context.LotusCounterDevices={send:async(job)=>{devices.push(job);return{ok:true,state:'SENT'}},receipt:()=>({width:8,height:8,bitmap:'AAAAAAAAAAA='}),labels:()=>[{width:8,height:8,bitmap:'AAAAAAAAAAA='}],status:async()=>({labelWidth:50,labelHeight:30}),token:()=>''};vm.createContext(context);vm.runInContext(readFileSync(new URL('../public/staff/qrcode.js',import.meta.url),'utf8'),context);vm.runInContext(readFileSync(new URL('../public/staff/staff.js',import.meta.url),'utf8'),context);
  const click=async dataset=>listeners.click({target:{closest:()=>({dataset,disabled:false})}});
  await new Promise(r=>setTimeout(r,10));assert.match(app.innerHTML,/Đăng nhập Lotus POS Cloud/);
  await listeners.submit({target:{id:'login',password:{value:env.POS_STAFF_PASSWORD}},preventDefault(){}});
  assert.match(app.innerHTML,/Màn hình thứ hai/);
  assert.match(app.innerHTML,/Giỏ món/);
+ assert.match(app.innerHTML,/data-category="Canh"/);
+ assert.match(app.innerHTML,/class="nav-brand"/);
+ assert.match(readFileSync(new URL('../public/counter/index.html',import.meta.url),'utf8'),/poc-counter\.css/);
+ await click({category:'Canh'});assert.match(menuList.innerHTML,/data-add="113"/);assert.doesNotMatch(menuList.innerHTML,/data-add="101"/);
+ await click({category:'Tất cả'});listeners.input({target:{id:'product-search',value:'PT007'}});assert.match(menuList.innerHTML,/data-add="107"/);assert.doesNotMatch(menuList.innerHTML,/data-add="101"/);
+ listeners.input({target:{id:'product-search',value:''}});
+ await click({screen:'products'});assert.match(app.innerHTML,/class="admin-grid"/);assert.match(app.innerHTML,/class="poc-table"/);assert.match(app.innerHTML,/id="product-form"/);
+ await click({screen:'vouchers'});assert.match(app.innerHTML,/class="admin-grid"/);assert.match(app.innerHTML,/id="voucher-form"/);
+ await click({screen:'shifts'});assert.match(app.innerHTML,/Lịch ca theo tuần \/ 周排班可视化/);assert.match(app.innerHTML,/class="week-grid"/);assert.match(app.innerHTML,/Dữ liệu ca từ D1/);
+ await click({screen:'qrorders'});assert.match(app.innerHTML,/QR Order · 扫码订单/);assert.match(app.innerHTML,/Chưa có đơn hàng trên D1 trong mục này/);
  await click({screen:'display'});assert.match(app.innerHTML,/Ghép màn hình/);
  await click({action:'display-pair'});assert.match(app.innerHTML,/Sao chép liên kết/);
  const pairing=db.prepare('SELECT id,token_hash FROM pos_display_sessions').get();assert.ok(pairing?.id);assert.ok(pairing.token_hash);
@@ -28,9 +39,9 @@ test('desktop counter buttons pair the second screen and publish priced cart thr
  await new Promise(r=>setTimeout(r,560));
  const snapshot=JSON.parse(db.prepare('SELECT snapshot_json FROM pos_display_sessions WHERE id=?').get(pairing.id).snapshot_json);
  assert.equal(snapshot.table,'T01');assert.equal(snapshot.total,130000);assert.equal(snapshot.items[0].qty,1);
- await click({screen:'license'});assert.match(app.innerHTML,/CHỈ MÔ PHỎNG/);
- await click({action:'license-grace'});assert.match(app.innerHTML,/GRACE/);
- await click({action:'license-suspended'});assert.match(app.innerHTML,/SUSPENDED/);
+ assert.doesNotMatch(app.innerHTML,/data-screen="license"/);
+ await click({screen:'license'});assert.doesNotMatch(app.innerHTML,/CHỈ MÔ PHỎNG|license-form/);
+ await click({action:'license-grace'});assert.doesNotMatch(app.innerHTML,/GRACE|SUSPENDED/);
  await click({screen:'dashboard'});assert.match(app.innerHTML,/Báo cáo ngày/);
  await click({screen:'new'});await click({action:'submit'});
  const order=db.prepare('SELECT id,total FROM qr_orders ORDER BY created_at DESC LIMIT 1').get();assert.ok(order);

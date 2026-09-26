@@ -1,3 +1,4 @@
+import {applyCurrentSchema} from './helpers/schema.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -6,7 +7,7 @@ import worker from '../src/worker.js';
 
 function setup(){
  const db=new DatabaseSync(':memory:');
- for(const n of ['0001_initial.sql','0002_customer_members_vouchers.sql','0003_pos_cloud.sql','0004_loyalty_points.sql','0005_inventory_refunds_roles.sql','0006_counter_display.sql','0007_counter_management.sql','0008_store_config.sql'])db.exec(readFileSync(new URL('../migrations/'+n,import.meta.url),'utf8'));
+ applyCurrentSchema(db,{legacyMenu:true});
  const DB={prepare(sql){let a=[];return{bind(...v){a=v;return this},async first(){return db.prepare(sql).get(...a)||null},async all(){return{results:db.prepare(sql).all(...a)}},async run(){return{meta:{changes:db.prepare(sql).run(...a).changes}}},_run(){return db.prepare(sql).run(...a)}}},async batch(stmts){db.exec('BEGIN');try{const r=stmts.map(x=>x._run());db.exec('COMMIT');return r}catch(e){db.exec('ROLLBACK');throw e}}};
  const env={DB,ASSETS:{fetch:async()=>new Response('',{status:404})},ORDERING_ENABLED:'true',SESSION_SECRET:'abcdefabcdefabcdefabcdefabcdefabcdef',POS_STAFF_PASSWORD:'654321',BANK_BIN:'970448',BANK_ACCOUNT_NUMBER:'609271',BANK_ACCOUNT_NAME:'HUANG TIANSHENG'};
  const call=async(path,method='GET',data,token,extra={})=>{const headers={Origin:'https://pos.example',...extra};if(data!==undefined)headers['Content-Type']='application/json';if(token)headers.Authorization='Bearer '+token;const r=await worker.fetch(new Request('https://pos.example'+path,{method,headers,body:data===undefined?undefined:JSON.stringify(data)}),env);return{status:r.status,...await r.json()}};
@@ -16,35 +17,49 @@ function setup(){
  return{db,env,call,login,item,post};
 }
 
-test('stock begins empty, QR/POS deduct atomically and cancellations return only tracked units',async()=>{
+test('empty stock never blocks QR orders; estimated usage and physical receipts remain separate',async()=>{
  const {db,call,login,item,post}=setup(),owner=await login();
  const order={table:'T01',items:[item(2)],idempotencyKey:'stock-order-aaaaaaaaaaaa'};
- assert.equal((await call('/api/catalog')).catalog.products.find(x=>x.id==='101').available,false);
- assert.equal((await post('/api/orders',order)).code,'OUT_OF_STOCK');
- const adjust=(target,id,quantity,kind='RECEIPT')=>post('/api/staff/inventory/adjust',{target,id,quantity,kind,reference:'Kiểm kê đầu ca',idempotencyKey:crypto.randomUUID()},owner);
- assert.equal((await adjust('PRODUCT','101',2)).status,200);
- assert.equal((await post('/api/orders',order)).code,'INGREDIENT_OUT_OF_STOCK');
- for(const ingredient of ['ING-PORK-HOCK','ING-DUCK','ING-CHICKEN','ING-RICE'])assert.equal((await adjust('INGREDIENT',ingredient,10000)).status,200);
  assert.equal((await call('/api/catalog')).catalog.products.find(x=>x.id==='101').available,true);
  const placed=await post('/api/orders',order);assert.equal(placed.status,201,JSON.stringify(placed));
  assert.equal(db.prepare("SELECT stock FROM pos_product_inventory WHERE product_id='101'").get().stock,0);
- assert.equal(db.prepare("SELECT stock FROM pos_ingredients WHERE id='ING-RICE'").get().stock,9500);
+ assert.equal(db.prepare("SELECT estimated_stock FROM pos_inventory_estimates WHERE target='PRODUCT' AND ref_id='101'").get().estimated_stock,-2);
+ const adjust=(target,id,quantity,kind='RECEIPT')=>post('/api/staff/inventory/adjust',{target,id,quantity,kind,reference:'Kiểm kê đầu ca',idempotencyKey:crypto.randomUUID()},owner);
+ assert.equal((await adjust('PRODUCT','101',2)).status,200);
+ for(const ingredient of ['ING-PORK-HOCK','ING-DUCK','ING-CHICKEN','ING-RICE'])assert.equal((await adjust('INGREDIENT',ingredient,10000)).status,200);
+ assert.equal((await call('/api/catalog')).catalog.products.find(x=>x.id==='101').available,true);
+ assert.equal(db.prepare("SELECT stock FROM pos_product_inventory WHERE product_id='101'").get().stock,2);
+ assert.equal(db.prepare("SELECT stock FROM pos_ingredients WHERE id='ING-RICE'").get().stock,10000);
  assert.equal((await post('/api/orders',order)).duplicate,true);
- assert.equal((await post('/api/orders',{...order,idempotencyKey:'stock-order-bbbbbbbbbbbb'})).code,'OUT_OF_STOCK');
+ assert.equal(db.prepare("SELECT estimated_stock FROM pos_inventory_estimates WHERE target='PRODUCT' AND ref_id='101'").get().estimated_stock,0);
  const id=placed.order.id,accepted=await post('/api/staff/orders/'+id+'/accept',{version:1},owner);
- assert.equal(accepted.status,200);assert.equal(accepted.jobs.length,1);
- assert.equal((await post('/api/staff/orders/'+id+'/append',{version:accepted.order.version,items:[item()]},owner)).code,'OUT_OF_STOCK');
- assert.equal(db.prepare('SELECT COUNT(*) AS n FROM pos_kitchen_jobs WHERE order_id=?').get(id).n,1);
- const cancelled=await post('/api/staff/orders/'+id+'/cancel-unit',{version:accepted.order.version,index:0,reason:'Khách đổi món'},owner);
- assert.equal(cancelled.status,200,JSON.stringify(cancelled));assert.equal(db.prepare("SELECT stock FROM pos_product_inventory WHERE product_id='101'").get().stock,1);
- assert.equal(db.prepare("SELECT stock FROM pos_ingredients WHERE id='ING-RICE'").get().stock,9750);
- const append=await post('/api/staff/orders/'+id+'/append',{version:cancelled.order.version,items:[item()]},owner);
- assert.equal(append.status,200,JSON.stringify(append));assert.equal(db.prepare("SELECT stock FROM pos_product_inventory WHERE product_id='101'").get().stock,0);
- const closed=await post('/api/staff/orders/'+id+'/cancel',{version:append.order.version,reason:'Khách chưa ăn'},owner);
+ assert.equal(accepted.status,200);assert.equal(accepted.jobs.length,0);
+ const appended=await post('/api/staff/orders/'+id+'/append',{version:accepted.order.version,items:[item()]},owner);assert.equal(appended.status,200);assert.equal(appended.jobs.length,0);
+ assert.equal(db.prepare('SELECT COUNT(*) AS n FROM pos_kitchen_jobs WHERE order_id=?').get(id).n,0);
+ assert.equal(db.prepare("SELECT estimated_stock FROM pos_inventory_estimates WHERE target='PRODUCT' AND ref_id='101'").get().estimated_stock,-1);
+ const cancelled=await post('/api/staff/orders/'+id+'/cancel-unit',{version:appended.order.version,index:0,reason:'Khách đổi món'},owner);
+ assert.equal(cancelled.status,200,JSON.stringify(cancelled));assert.equal(db.prepare("SELECT stock FROM pos_product_inventory WHERE product_id='101'").get().stock,2);
+ const closed=await post('/api/staff/orders/'+id+'/cancel',{version:cancelled.order.version,reason:'Khách chưa ăn'},owner);
  assert.equal(closed.status,200,JSON.stringify(closed));assert.equal(db.prepare("SELECT stock FROM pos_product_inventory WHERE product_id='101'").get().stock,2);
  assert.equal(db.prepare("SELECT stock FROM pos_ingredients WHERE id='ING-RICE'").get().stock,10000);
- assert.equal((await post('/api/staff/orders/'+id+'/cancel',{version:append.order.version,reason:'Trùng'},owner)).status,409);
- assert.equal(db.prepare('SELECT COUNT(*) AS n FROM pos_inventory_movements WHERE order_id=?').get(id).n,20);
+ assert.equal(db.prepare("SELECT estimated_stock FROM pos_inventory_estimates WHERE target='PRODUCT' AND ref_id='101'").get().estimated_stock,2);
+ assert.equal((await post('/api/staff/orders/'+id+'/cancel',{version:cancelled.order.version,reason:'Trùng'},owner)).status,409);
+ db.close();
+});
+
+test('active product without a recipe is orderable before and after a physical receipt',async()=>{
+ const {db,call,login,post}=setup(),owner=await login();
+ db.prepare("INSERT INTO pos_products(id,sku,name,name_cn,category,station,price,large_price,updated_at) VALUES('NEW-001','NEW001','Món mới','新菜','Món mới','KITCHEN',25000,25000,?)").run(new Date().toISOString());
+ assert.equal((await call('/api/catalog')).catalog.products.find(p=>p.id==='NEW-001').available,true);
+ const receipt=await post('/api/staff/inventory/adjust',{target:'PRODUCT',id:'NEW-001',quantity:4,kind:'RECEIPT',reference:'Kiểm thử nhập kho',idempotencyKey:crypto.randomUUID()},owner);
+ assert.equal(receipt.status,200,JSON.stringify(receipt));
+ const catalog=await call('/api/catalog');
+ assert.equal(catalog.catalog.products.find(p=>p.id==='NEW-001').stock,4);
+ assert.equal(catalog.catalog.products.find(p=>p.id==='NEW-001').available,true);
+ assert.equal(catalog.catalog.products.find(p=>p.id==='101').available,true);
+ const sale=await post('/api/orders',{table:'T01',items:[{productId:'NEW-001',qty:1}],idempotencyKey:'new-product-test-aaaaaaa'});assert.equal(sale.status,201);
+ assert.equal(db.prepare("SELECT stock FROM pos_product_inventory WHERE product_id='NEW-001'").get().stock,4);
+ assert.equal(db.prepare("SELECT estimated_stock FROM pos_inventory_estimates WHERE target='PRODUCT' AND ref_id='NEW-001'").get().estimated_stock,3);
  db.close();
 });
 
@@ -69,7 +84,7 @@ test('stock receipts and plans apply once; refunds cap paid amount, reverse poin
  const paid=await post('/api/staff/orders/'+saved.order.id+'/pay',{version:saved.order.version,method:'BANK'},owner);assert.equal(paid.order.pointsEarned,39);
  const refund={orderId:saved.order.id,amount:30000,reason:'Hoàn một phần',method:'CASH',idempotencyKey:'refund_first_aaaaaaaaaaaa'};
  const first=await post('/api/staff/refunds',refund,owner);assert.equal(first.status,201,JSON.stringify(first));
- assert.equal(db.prepare("SELECT stock FROM pos_product_inventory WHERE product_id='101'").get().stock,2);
+ assert.equal(db.prepare("SELECT stock FROM pos_product_inventory WHERE product_id='101'").get().stock,5);
  assert.deepEqual([db.prepare('SELECT points,spend,orders FROM members WHERE id=?').get(member.member.id).points,db.prepare('SELECT points FROM loyalty_transactions WHERE order_id=?').get(saved.order.id).points],[36,36]);
  assert.equal((await post('/api/staff/refunds',refund,owner)).duplicate,true);
  assert.equal((await post('/api/staff/refunds',{...refund,idempotencyKey:'refund_over_aaaaaaaaaaaa',amount:400000},owner)).code,'REFUND_EXCEEDS_PAID');
@@ -77,8 +92,8 @@ test('stock receipts and plans apply once; refunds cap paid amount, reverse poin
  assert.equal(full.status,201,JSON.stringify(full));
  assert.equal((await post('/api/staff/refunds',{...refund,amount:360000,reason:'Hàng còn nguyên',idempotencyKey:'refund_final_aaaaaaaaaaaa',restockItems:[{productId:'101',quantity:1}],confirmRestock:true},owner)).duplicate,true);
  assert.deepEqual(Object.values(db.prepare('SELECT points,spend,orders,last_visit FROM members WHERE id=?').get(member.member.id)),[0,0,0,null]);
- assert.equal(db.prepare("SELECT stock FROM pos_product_inventory WHERE product_id='101'").get().stock,3);
- assert.equal(db.prepare("SELECT stock FROM pos_ingredients WHERE id='ING-RICE'").get().stock,11500);
+ assert.equal(db.prepare("SELECT stock FROM pos_product_inventory WHERE product_id='101'").get().stock,6);
+ assert.equal(db.prepare("SELECT stock FROM pos_ingredients WHERE id='ING-RICE'").get().stock,12250);
  assert.equal((await call('/api/staff/orders/'+saved.order.id,'GET',undefined,owner)).order.refundedAmount,390000);
  assert.equal((await post('/api/staff/refunds',{...refund,idempotencyKey:'refund_after_aaaaaaaaaaaa'},owner)).code,'REFUND_EXCEEDS_PAID');
  db.close();
@@ -107,7 +122,7 @@ test('split bill refund limits and server permissions survive forged staff reque
  db.close();
 });
 
-test('pre-migration orders keep their original stock accounting until an explicit append',async()=>{
+test('pre-migration orders remain untracked until an explicit append',async()=>{
  const {db,login,post,item}=setup(),owner=await login();
  const id=crypto.randomUUID(),time='2026-09-23T01:00:00.000Z',items=JSON.stringify([{productId:'101',qty:1,price:130000,name:'Cơm',mods:{size:'中',spice:'中'}}]);
  db.prepare("INSERT INTO qr_orders(id,idem_key,fingerprint,token_hash,code,table_id,items_json,subtotal,discount,total,status,payment_status,source,version,kitchen_revision,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,'ACCEPTED','UNPAID','QR',1,1,?,?)")
@@ -118,7 +133,8 @@ test('pre-migration orders keep their original stock accounting until an explici
  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM pos_inventory_movements WHERE order_id=?').get(id).n,0);
  const id2=crypto.randomUUID();db.prepare("INSERT INTO qr_orders(id,idem_key,fingerprint,token_hash,code,table_id,items_json,subtotal,discount,total,status,payment_status,source,version,kitchen_revision,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,'ACCEPTED','UNPAID','QR',1,1,?,?)")
   .run(id2,'legacy-key-'+id2,'legacy-fingerprint','legacy-token','PT-260923-EFAB123456','T01',items,130000,0,130000,time,time);
- assert.equal((await post('/api/staff/orders/'+id2+'/append',{version:1,items:[item()]},owner)).code,'OUT_OF_STOCK');
- assert.equal(db.prepare('SELECT inventory_tracked,version FROM qr_orders WHERE id=?').get(id2).inventory_tracked,0);
+ const appended=await post('/api/staff/orders/'+id2+'/append',{version:1,items:[item()]},owner);assert.equal(appended.status,200,JSON.stringify(appended));
+ assert.equal(db.prepare('SELECT inventory_tracked,version FROM qr_orders WHERE id=?').get(id2).inventory_tracked,1);
+ assert.equal(db.prepare("SELECT stock FROM pos_product_inventory WHERE product_id='101'").get().stock,0);
  db.close();
 });

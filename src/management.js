@@ -129,6 +129,7 @@ export async function handleManagement(req,env,actor,deps){
  }catch(e){
   const code=e?.message||'';
   if(['INVALID_PRODUCT','INVALID_VOUCHER_CONFIG','INVALID_SCHEDULE','INVALID_ATTENDANCE','INVALID_CASH_SHIFT','INVALID_LICENSE'].includes(code))return bad(400,code,'Dữ liệu nhập không hợp lệ');
+  if(/STAFF_ON_LEAVE/i.test(code))return bad(409,'STAFF_ON_LEAVE','Nhân viên đã được duyệt nghỉ ngày này; chọn người khác hoặc đổi ngày');
   if(/UNIQUE|constraint|FOREIGN KEY|SHIFT_OVERLAP/i.test(code))return bad(409,'CONFLICT','Dữ liệu vừa thay đổi, đã tồn tại hoặc trùng ca');
   console.error('Counter management:',code);return bad(503,'SERVICE_UNAVAILABLE','Không ghi được D1; tải lại dữ liệu trước khi thử tiếp');
  }
