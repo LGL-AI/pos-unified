@@ -1,0 +1,36 @@
+name: Deploy Lotus POS rc.4 to Cloudflare
+
+"on":
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lotus-pos-worker-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_ACCOUNT_ID: "8973c5ef559d1c731b6c1a7b4586ca23"
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_POS_DEPLOY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check deployment token
+        run: test -n "$CLOUDFLARE_API_TOKEN"
+      - name: Install Wrangler
+        run: npm install --no-audit --no-fund
+      - name: Test full POS and 80 customer journeys
+        run: npm test
+      - name: Require all 13 migrations on real D1
+        run: npm run check:d1
+      - name: Deploy Worker and assets
+        run: npm run deploy
+      - name: Verify published Worker and ordering readiness
+        run: node scripts/check-cloud-health.mjs
