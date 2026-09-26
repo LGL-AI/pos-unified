@@ -14,7 +14,7 @@ PRINTER_JAR="$BUILD_DIR/vendor/printerlibrary-1.0.18.jar"
 ASSETS="$BUILD_DIR/assets"
 KEYSTORE="${LOTUS_KEYSTORE:-$PROJECT_DIR/signing/lotus-cloud-pilot-uat.jks}"
 JAVAC_BIN="${JAVAC_BIN:-$PROJECT_DIR/../../jdk-bin/javac}"
-OUTPUT_APK="$PROJECT_DIR/dist/LotusPOS_Cloud_v2.4.0_SUNMI_D1_UAT.apk"
+OUTPUT_APK="$PROJECT_DIR/dist/LotusPOS_Cloud_v2.6.0-rc.3_SUNMI_D1_UAT.apk"
 
 for required in "$TOOLS/aapt2" "$TOOLS/d8" "$TOOLS/zipalign" "$TOOLS/apksigner" "$ANDROID_JAR" "$PRINTER_AAR" "$JAVAC_BIN"; do
   if [[ ! -e "$required" ]]; then
@@ -40,8 +40,8 @@ unzip -p "$PRINTER_AAR" classes.jar > "$PRINTER_JAR"
   --manifest "$APP_DIR/AndroidManifest.xml" \
   --min-sdk-version 23 \
   --target-sdk-version 35 \
-  --version-code 8 \
-  --version-name 2.4.0 \
+  --version-code 10 \
+  --version-name 2.6.0-rc.3 \
   -A "$ASSETS" \
   --java "$BUILD_DIR/generated" \
   "$BUILD_DIR/compiled/resources.zip"

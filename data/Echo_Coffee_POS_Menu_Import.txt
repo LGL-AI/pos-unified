@@ -1,0 +1,115 @@
+# ECHO COFFEE — POS MENU IMPORT
+# Encoding: UTF-8 BOM | Delimiter: TAB | Currency: VND
+# ONE = không phân size. M/L = size theo menu gốc.
+# Giá đã đổi từ dạng 55K thành số nguyên VND, ví dụ 55K = 55000.
+# Tổng món gốc: 68 | Tổng dòng SKU/biến thể sau khi tách size: 85.
+#
+sku	category_vi	category_zh	name_vi	name_zh	size	price_vnd	display_price	best_seller	modifier_group	note	source_image
+MAIN001	Món chính	主食	Gà giòn 2 miếng	炸鸡块（2块）	ONE	55000	55K				IMG_6606.jpeg
+MAIN002	Món chính	主食	Gà giòn sốt 2 miếng	酱汁炸鸡（2块）	ONE	65000	65K		SAUCE_FRIED_CHICKEN	Chọn 1 sốt: Phô mai cay / Hàn Quốc / Mắm tỏi	IMG_6606.jpeg
+MAIN003	Món chính	主食	Burger gà chiên giòn	炸鸡汉堡	ONE	45000	45K				IMG_6606.jpeg
+MAIN004	Món chính	主食	Combo Burger gà chiên giòn + khoai tây chiên + 1 Coca	炸鸡汉堡 + 薯条 + 可乐	ONE	80000	80K			Combo gồm burger gà chiên giòn + khoai tây chiên + 1 Coca	IMG_6606.jpeg
+MAIN005	Món chính	主食	Bánh mì Hoàng Gia	皇家法棍面包	ONE	48000	48K				IMG_6606.jpeg
+MAIN006	Món chính	主食	Mì bò Đài Loan	台湾牛肉面	ONE	75000	75K				IMG_6606.jpeg
+MAIN007	Món chính	主食	Sủi cảo	水饺	ONE	80000	80K				IMG_6606.jpeg
+MAIN008	Món chính	主食	Hoành thánh	馄饨	ONE	60000	60K				IMG_6606.jpeg
+MAIN009	Món chính	主食	Cơm giò heo Long Giang	隆江猪脚饭	ONE	85000	85K				IMG_6606.jpeg
+MAIN010	Món chính	主食	Cơm xá xíu	叉烧饭	ONE	75000	75K				IMG_6606.jpeg
+MAIN011	Món chính	主食	Cơm vịt quay	烧鸭饭	ONE	75000	75K				IMG_6606.jpeg
+MAIN012	Món chính	主食	Cơm gà Hải Nam	海南鸡饭	ONE	75000	75K				IMG_6606.jpeg
+MAIN013	Món chính	主食	Combo cơm + trà size nhỏ	套餐：主食 + 饮料	ONE	120000	120K		COMBO_RICE_MAIN+COMBO_RICE_DRINK	Chọn 1 cơm: xá xíu / vịt quay / gà Hải Nam; chọn 1 trà size nhỏ: đào / táo / việt quất	IMG_6606.jpeg
+MAIN014	Món chính	主食	Set cơm Hoàng Gia	皇家至尊套餐	ONE	140000	140K				IMG_6606.jpeg
+SNACK001	Đồ ăn nhẹ & tráng miệng	小吃与甜点	Gà viên Popcorn	鸡米花	ONE	45000	45K				IMG_6607.jpeg
+SNACK002	Đồ ăn nhẹ & tráng miệng	小吃与甜点	Mandu	煎饺	ONE	45000	45K				IMG_6607.jpeg
+SNACK003	Đồ ăn nhẹ & tráng miệng	小吃与甜点	Khoai tây chiên	薯条	ONE	45000	45K				IMG_6607.jpeg
+SNACK004	Đồ ăn nhẹ & tráng miệng	小吃与甜点	Mousse Chocolate	巧克力慕斯	ONE	45000	45K				IMG_6607.jpeg
+SNACK005	Đồ ăn nhẹ & tráng miệng	小吃与甜点	Mousse Chanh Dây	百香果慕斯	ONE	45000	45K				IMG_6607.jpeg
+SNACK006	Đồ ăn nhẹ & tráng miệng	小吃与甜点	Bò viên chiên	煎牛肉丸	ONE	35000	35K				IMG_6607.jpeg
+SNACK007	Đồ ăn nhẹ & tráng miệng	小吃与甜点	Tôm chiên	炸虾	ONE	35000	35K				IMG_6607.jpeg
+SNACK008	Đồ ăn nhẹ & tráng miệng	小吃与甜点	Bánh tart trứng	蛋挞	ONE	17000	17K				IMG_6607.jpeg
+SNACK009	Đồ ăn nhẹ & tráng miệng	小吃与甜点	Lạp xưởng nướng New Zealand	新西兰烤肠	ONE	25000	25K				IMG_6607.jpeg
+SNACK010	Đồ ăn nhẹ & tráng miệng	小吃与甜点	Chè Trái Cây Đài Loan	古早四果汤	ONE	50000	50K				IMG_6607.jpeg
+SNACK011	Đồ ăn nhẹ & tráng miệng	小吃与甜点	Sụn gà xiên que	骨肉相连	ONE	40000	40K				IMG_6607.jpeg
+SNACK012	Đồ ăn nhẹ & tráng miệng	小吃与甜点	Cá viên chiên Hoàng Kim	黄金鱼蛋	ONE	35000	35K				IMG_6607.jpeg
+SNACK013	Đồ ăn nhẹ & tráng miệng	小吃与甜点	Viên cá biển nhân thịt	包心海鱼丸	ONE	35000	35K				IMG_6607.jpeg
+SNACK014	Đồ ăn nhẹ & tráng miệng	小吃与甜点	Cá viên heo hương nấm đông cô	香菇猪肉贡丸	ONE	35000	35K				IMG_6607.jpeg
+TOP001	Topping	加料	Kem Sữa	奶盖	ONE	16000	16K				IMG_6607.jpeg
+TOP002	Topping	加料	Kem Trứng	蛋蕾	ONE	10000	10K			Tên tiếng Trung chép đúng theo menu gốc; nên xác nhận lại trước khi public.	IMG_6607.jpeg
+TOP003	Topping	加料	Trân Châu Trắng	白珍珠	ONE	10000	10K				IMG_6607.jpeg
+TOP004	Topping	加料	Thạch Cafe Phô Mai	咖啡芝士冻	ONE	10000	10K				IMG_6607.jpeg
+TOP005	Topping	加料	Trân châu đậu đỏ nổ	珍珠红豆爆爆珠	ONE	10000	10K				IMG_6607.jpeg
+FRUIT001-M	Trà trái cây	水果茶	Trà đào	桃子茶	M	50000	50K				IMG_6608.jpeg
+FRUIT001-L	Trà trái cây	水果茶	Trà đào	桃子茶	L	58000	58K				IMG_6608.jpeg
+FRUIT002-M	Trà trái cây	水果茶	Trà Việt quất	蓝莓茶	M	50000	50K				IMG_6608.jpeg
+FRUIT002-L	Trà trái cây	水果茶	Trà Việt quất	蓝莓茶	L	58000	58K				IMG_6608.jpeg
+FRUIT003-M	Trà trái cây	水果茶	Trà táo	苹果茶	M	50000	50K				IMG_6608.jpeg
+FRUIT003-L	Trà trái cây	水果茶	Trà táo	苹果茶	L	58000	58K				IMG_6608.jpeg
+FRUIT004-M	Trà trái cây	水果茶	Trà hibiscus đào	洛神花桃子茶	M	55000	55K				IMG_6608.jpeg
+FRUIT004-L	Trà trái cây	水果茶	Trà hibiscus đào	洛神花桃子茶	L	63000	63K				IMG_6608.jpeg
+FRUIT005-M	Trà trái cây	水果茶	Trà táo xanh bạc hà	薄荷青苹果茶	M	55000	55K	YES			IMG_6608.jpeg
+FRUIT005-L	Trà trái cây	水果茶	Trà táo xanh bạc hà	薄荷青苹果茶	L	63000	63K	YES			IMG_6608.jpeg
+FRUIT006-M	Trà trái cây	水果茶	Trà ổi hồng	粉红芭乐茶	M	55000	55K				IMG_6608.jpeg
+FRUIT006-L	Trà trái cây	水果茶	Trà ổi hồng	粉红芭乐茶	L	63000	63K				IMG_6608.jpeg
+FRUIT007-M	Trà trái cây	水果茶	Trà dưa lưới	哈密瓜茶	M	55000	55K				IMG_6608.jpeg
+FRUIT007-L	Trà trái cây	水果茶	Trà dưa lưới	哈密瓜茶	L	63000	63K				IMG_6608.jpeg
+FRUIT008-M	Trà trái cây	水果茶	Trà trái cây nhiệt đới	热带水果茶	M	55000	55K				IMG_6608.jpeg
+FRUIT008-L	Trà trái cây	水果茶	Trà trái cây nhiệt đới	热带水果茶	L	63000	63K				IMG_6608.jpeg
+FRUIT009-M	Trà trái cây	水果茶	Xoài dương chi cam lộ	杨枝甘露	M	58000	58K				IMG_6608.jpeg
+MAC001-L	Trà Macchiato	奶盖茶	Lục trà macchiato	绿茶奶盖	L	55000	55K				IMG_6608.jpeg
+MAC002-L	Trà Macchiato	奶盖茶	Hồng trà macchiato	红茶奶盖	L	55000	55K				IMG_6608.jpeg
+MAC003-L	Trà Macchiato	奶盖茶	Trà gạo rang macchiato	玄米茶奶盖	L	55000	55K				IMG_6608.jpeg
+MAC004-L	Trà Macchiato	奶盖茶	Trà oolong macchiato	乌龙茶奶盖	L	55000	55K				IMG_6608.jpeg
+MILK001-M	Trà sữa	奶茶	Hồng trà sữa	红茶奶茶	M	50000	50K				IMG_6609.jpeg
+MILK001-L	Trà sữa	奶茶	Hồng trà sữa	红茶奶茶	L	58000	58K				IMG_6609.jpeg
+MILK002-M	Trà sữa	奶茶	Trà sữa Oolong Lài	茉莉乌龙奶茶	M	50000	50K				IMG_6609.jpeg
+MILK002-L	Trà sữa	奶茶	Trà sữa Oolong Lài	茉莉乌龙奶茶	L	58000	58K				IMG_6609.jpeg
+MILK003-M	Trà sữa	奶茶	Trà sữa bạc hà	薄荷奶茶	M	50000	50K				IMG_6609.jpeg
+MILK003-L	Trà sữa	奶茶	Trà sữa bạc hà	薄荷奶茶	L	58000	58K				IMG_6609.jpeg
+MILK004-M	Trà sữa	奶茶	Trà sữa gạo rang	玄米奶茶	M	50000	50K	YES			IMG_6609.jpeg
+MILK004-L	Trà sữa	奶茶	Trà sữa gạo rang	玄米奶茶	L	58000	58K	YES			IMG_6609.jpeg
+MILK005-M	Trà sữa	奶茶	Trà sữa Oolong nướng	碳焙乌龙奶茶	M	50000	50K	YES			IMG_6609.jpeg
+MILK005-L	Trà sữa	奶茶	Trà sữa Oolong nướng	碳焙乌龙奶茶	L	58000	58K	YES			IMG_6609.jpeg
+MILK006-M	Trà sữa	奶茶	Trà sữa Oreo Macchiato	奥利奥奶盖奶茶	M	55000	55K				IMG_6609.jpeg
+MILK006-L	Trà sữa	奶茶	Trà sữa Oreo Macchiato	奥利奥奶盖奶茶	L	63000	63K				IMG_6609.jpeg
+YOG001	Yaua	酸奶	Yaua trái cây	水果酸奶	ONE	59000	59K				IMG_6609.jpeg
+YOG002	Yaua	酸奶	Yaua dâu tằm	桑葚酸奶	ONE	59000	59K				IMG_6609.jpeg
+BLEND001	Đá xay	冰沙	Xoài đá xay	芒果冰沙	ONE	59000	59K				IMG_6609.jpeg
+BLEND002	Đá xay	冰沙	Việt quất đá xay	蓝莓冰沙	ONE	59000	59K				IMG_6609.jpeg
+BLEND003	Đá xay	冰沙	Matcha đá xay	抹茶冰沙	ONE	69000	69K				IMG_6609.jpeg
+BLEND004	Đá xay	冰沙	Chocolate đá xay	巧克力冰沙	ONE	69000	69K				IMG_6609.jpeg
+BLEND005	Đá xay	冰沙	Đá xay Fly Candy	飞糖冰沙	ONE	59000	59K				IMG_6609.jpeg
+COF001	Cà phê	咖啡	Cà phê đen đá	冰黑咖啡	ONE	40000	40K				IMG_6610.jpeg
+COF002	Cà phê	咖啡	Cà phê sữa đá	冰牛奶咖啡	ONE	45000	45K				IMG_6610.jpeg
+COF003	Cà phê	咖啡	Bạc xỉu	白底小啡	ONE	45000	45K			Tên tiếng Trung chép đúng theo menu gốc; nên xác nhận lại trước khi public.	IMG_6610.jpeg
+COF004	Cà phê	咖啡	Americano	美式咖啡	ONE	40000	40K				IMG_6610.jpeg
+COF005	Cà phê	咖啡	Latte	拿铁咖啡	ONE	45000	45K				IMG_6610.jpeg
+COF006	Cà phê	咖啡	Cà phê kem muối	盐奶盖咖啡	ONE	50000	50K				IMG_6610.jpeg
+LAT001-M	Latte	拿铁	Khoai môn sữa	香芋鲜奶	M	50000	50K				IMG_6610.jpeg
+LAT001-L	Latte	拿铁	Khoai môn sữa	香芋鲜奶	L	58000	58K				IMG_6610.jpeg
+LAT002-M	Latte	拿铁	Chocolate sữa	巧克力鲜奶	M	55000	55K				IMG_6610.jpeg
+LAT002-L	Latte	拿铁	Chocolate sữa	巧克力鲜奶	L	63000	63K				IMG_6610.jpeg
+LAT003-M	Latte	拿铁	Matcha Latte	抹茶拿铁	M	55000	55K				IMG_6610.jpeg
+LAT003-L	Latte	拿铁	Matcha Latte	抹茶拿铁	L	63000	63K				IMG_6610.jpeg
+
+# ==================== MODIFIER GROUPS ====================
+modifier_group	option_code	option_vi	option_zh	price_delta_vnd	note
+SAUCE_FRIED_CHICKEN	S01	Phô mai cay	辣芝士酱	0	Chọn 1
+SAUCE_FRIED_CHICKEN	S02	Sốt Hàn Quốc	韩式酱	0	Chọn 1
+SAUCE_FRIED_CHICKEN	S03	Mắm tỏi	蒜香鱼露酱	0	Chọn 1
+COMBO_RICE_MAIN	R01	Cơm xá xíu	叉烧饭	0	Chọn 1
+COMBO_RICE_MAIN	R02	Cơm vịt quay	烧鸭饭	0	Chọn 1
+COMBO_RICE_MAIN	R03	Cơm gà Hải Nam	海南鸡饭	0	Chọn 1
+COMBO_RICE_DRINK	D01	Trà đào size nhỏ	桃子茶（小杯）	0	Chọn 1
+COMBO_RICE_DRINK	D02	Trà táo size nhỏ	苹果茶（小杯）	0	Chọn 1
+COMBO_RICE_DRINK	D03	Trà Việt quất size nhỏ	蓝莓茶（小杯）	0	Chọn 1
+DRINK_TOPPING	T01	Kem Sữa	奶盖	16000	Topping
+DRINK_TOPPING	T02	Kem Trứng	蛋蕾	10000	Topping; chữ Trung theo menu gốc, nên rà soát
+DRINK_TOPPING	T03	Trân Châu Trắng	白珍珠	10000	Topping
+DRINK_TOPPING	T04	Thạch Cafe Phô Mai	咖啡芝士冻	10000	Topping
+DRINK_TOPPING	T05	Trân châu đậu đỏ nổ	珍珠红豆爆爆珠	10000	Topping
+
+# ==================== DATA REVIEW NOTES ====================
+# 1. 'Kem Trứng / 蛋蕾' và 'Bạc xỉu / 白底小啡' được chép đúng theo ảnh menu nhưng cách gọi tiếng Trung khá bất thường; nên xác nhận với quán trước khi đưa lên UI production.
+# 2. Combo cơm 120K có 2 nhóm lựa chọn: món cơm và trà size nhỏ.
+# 3. Gà giòn sốt 2 miếng 65K có 3 lựa chọn sốt, không thấy phụ thu trên menu.
+# 4. Topping được tách thành SKU riêng và cũng liệt kê trong modifier group DRINK_TOPPING để dễ map vào POS.

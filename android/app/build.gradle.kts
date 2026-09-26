@@ -10,8 +10,8 @@ android {
         applicationId = "vn.lotusai.pos.cloudpilot"
         minSdk = 23
         targetSdk = 35
-        versionCode = 8
-        versionName = "2.4.0"
+        versionCode = 10
+        versionName = "2.6.0-rc.3"
     }
 
     buildTypes {

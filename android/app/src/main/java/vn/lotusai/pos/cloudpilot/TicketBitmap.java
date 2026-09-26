@@ -2,6 +2,7 @@ package vn.lotusai.pos.cloudpilot;
 
 import android.graphics.*;
 import android.text.*;
+import android.util.Base64;
 import org.json.*;
 
 /** Android font fallback supplies Vietnamese and Chinese; printer code pages are not used. */
@@ -26,7 +27,7 @@ public final class TicketBitmap {
             t.append(x.optInt("qty",1)).append(" × ").append(x.optString("name")).append('\n');
             if(!x.optString("nameCn").isEmpty())t.append(x.optString("nameCn")).append('\n');
             if(!x.optString("mods").isEmpty())t.append("  ").append(x.optString("mods")).append('\n');
-            if(receipt)t.append(MainActivity.money(Math.round(x.optDouble("price")*x.optInt("qty",1)))).append(" đ\n");
+            if(receipt)t.append(MainActivity.money(Math.round(x.optDouble("price")))).append(" × ").append(x.optInt("qty",1)).append(" = ").append(MainActivity.money(Math.round(x.optDouble("price")*x.optInt("qty",1)))).append(" đ\n");
             t.append("--------------------------------\n");
         }
         if(receipt){
@@ -40,9 +41,29 @@ public final class TicketBitmap {
                 t.append("Khách đưa / 实收: ").append(MainActivity.money(Math.round(p.optDouble("received")))).append('\n');
                 t.append("Tiền thối / 找零: ").append(MainActivity.money(Math.round(p.optDouble("change")))).append('\n');
             }
+            if(!p.optString("memberName").isEmpty())t.append("Hội viên: ").append(p.optString("memberName")).append('\n');
+            t.append("Cảm ơn quý khách!\n");
             t.append("Biên nhận nội bộ, không thay hóa đơn VAT\n");
-        }else t.append("CHƯA PHẢI HÓA ĐƠN THANH TOÁN\n非付款凭证\n");
-        return renderText(t.toString(),width);
+        }else t.append("PHIẾU BẾP SAU THANH TOÁN\n非付款凭证\n");
+        return withCodes(renderText(t.toString(),width),p,width,receipt);
+    }
+    private static Bitmap decodePng(String data)throws Exception{
+        if(data==null||!data.startsWith("data:image/png;base64,")||data.length()>500000) return null;
+        byte[] raw=Base64.decode(data.substring("data:image/png;base64,".length()),Base64.DEFAULT);
+        Bitmap b=BitmapFactory.decodeByteArray(raw,0,raw.length);
+        if(b==null||b.getWidth()>1200||b.getHeight()>1200)throw new Exception("PRINT_IMAGE_INVALID");return b;
+    }
+    private static Bitmap withCodes(Bitmap body,JSONObject p,int width,boolean receipt)throws Exception{
+        Bitmap barcode=decodePng(p.optString("orderBarcodePng"));
+        Bitmap feedback=receipt?decodePng(p.optString("feedbackQrPng")):null;
+        int qrSize=Math.min(width-64,210);
+        int height=body.getHeight()+(barcode==null?0:110)+(feedback==null?0:qrSize+42);
+        if(height>12000)throw new Exception("TICKET_TOO_LONG");
+        Bitmap output=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888);Canvas c=new Canvas(output);c.drawColor(Color.WHITE);c.drawBitmap(body,0,0,null);
+        Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);paint.setColor(Color.BLACK);paint.setTextSize(18);int y=body.getHeight();
+        if(barcode!=null){c.drawBitmap(barcode,null,new Rect(12,y+6,width-12,y+80),null);y+=86;paint.setTextAlign(Paint.Align.CENTER);c.drawText(p.optString("orderCode"),width/2f,y,paint);y+=24;}
+        if(feedback!=null){paint.setTextAlign(Paint.Align.CENTER);c.drawText("Quét QR góp ý",width/2f,y+20,paint);y+=30;c.drawBitmap(feedback,null,new Rect((width-qrSize)/2,y,(width+qrSize)/2,y+qrSize),null);y+=qrSize+12;}
+        return output;
     }
     public static Bitmap renderText(String t,int width)throws Exception{
         TextPaint paint=new TextPaint(Paint.ANTI_ALIAS_FLAG);paint.setColor(Color.BLACK);
