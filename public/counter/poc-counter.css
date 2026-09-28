@@ -190,8 +190,13 @@ body[data-mode="counter"] .week-stats strong{display:block;font-size:20px}
   body[data-mode="counter"] .dash-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media(max-width:1150px){
-  body[data-mode="counter"] .counter-grid{display:block}
-  body[data-mode="counter"] .card-sticky{position:static}
+  body[data-mode="counter"] header{margin-left:0}
+  body[data-mode="counter"] #app{margin-left:0;padding:14px 14px 110px}
+  body[data-mode="counter"] nav{top:auto;bottom:0;right:0;width:100%;height:auto;max-height:80px;padding:4px;flex-direction:row;gap:0;overflow-x:auto;overflow-y:hidden}
+  body[data-mode="counter"] nav .nav-brand,body[data-mode="counter"] nav .nav-footer{display:none}
+  body[data-mode="counter"] nav button{flex:0 0 116px;width:116px;min-height:60px;text-align:center;padding:8px 4px;font-size:11px}
+  body[data-mode="counter"] .counter-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,.72fr);gap:12px}
+  body[data-mode="counter"] .card-sticky{position:sticky;top:12px;max-height:calc(100vh - 105px);overflow-y:auto}
   body[data-mode="counter"] .pos-orderbar{grid-template-columns:repeat(2,minmax(0,1fr))}
   body[data-mode="counter"] .admin-grid{grid-template-columns:1fr}
   body[data-mode="counter"] .admin-grid form{max-height:none;overflow:visible}
@@ -213,6 +218,10 @@ body[data-mode="counter"] .week-stats strong{display:block;font-size:20px}
   body[data-mode="counter"] nav button small{font-size:10px}
   body[data-mode="counter"] .productGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
   body[data-mode="counter"] .week-stats{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:700px){
+  body[data-mode="counter"] .counter-grid{display:block}
+  body[data-mode="counter"] .card-sticky{position:static;max-height:none;overflow:visible}
 }
 @media(max-width:550px){
   body[data-mode="counter"] .pos-orderbar{grid-template-columns:1fr}

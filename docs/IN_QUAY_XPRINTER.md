@@ -1,5 +1,9 @@
 # Lắp máy in, két và máy quét cho POS quầy 2.5.0
 
+## Bổ sung cho 2.6.0-rc.5
+
+Trong `http://127.0.0.1:18181/setup` hoặc **POS quầy → Thiết bị**, điền thêm IP nội bộ và port (thường 9100, kiểm tra máy thật) của KV804. Sau khi nhân viên xác nhận đã thu tiền trên POS quầy, cầu in tự gửi hóa đơn Q200, phiếu bếp KV804 và tem XP-365B; không cần bấm ba nút in. Cần dùng bản `bridge/` rc.5 trên cùng máy Windows, đã ghép mã, giữ cửa sổ bridge và trình duyệt quầy chạy. Khi thanh toán bằng APK SUNMI, bill và phiếu bếp chạy theo cấu hình native; quầy nhận tem từ D1 ở lượt kiểm tra kế tiếp. Chỉ dùng nút in lại sau khi đã kiểm tra giấy thực tế.
+
 ## Sơ đồ ở cửa hàng
 
 | Thiết bị | Kết nối tại quầy | Chức năng |

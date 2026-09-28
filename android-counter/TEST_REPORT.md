@@ -1,0 +1,21 @@
+# Lotus POS Counter Android 11 · P0.5 · 28/09/2026
+
+Nguồn: RC5 do người dùng cung cấp. APK `vn.lotusai.pos.counter` versionCode **7**, versionName `2.6.0-rc.5-counter-p0.5`, ký cùng certificate debug của bản versionCode 6 để cài đè trên máy ảo ASUS.
+
+| Hạng mục | Kết quả |
+| --- | --- |
+| Build và chữ ký | PASS: target API 30, min API 23; chữ ký v1/v2/v3; UI quầy và UI màn hình khách trong APK trùng source RC5. |
+| API/DB/UI cục bộ | PASS: 308/308 `npm test`; QR tạo đơn trong D1 giả lập bằng SQLite, quầy/POS cầm tay đọc đơn, màn hình khách thấy đơn và trạng thái PAID, trang QR đọc lại PAID. Test thao tác Android tạo món và khách ghi DB, POS khác thanh toán, quầy nhận job in và đẩy ảnh chụp PAID mới cho màn hình khách. |
+| QR trên WebView Android 11 cũ | PASS trong VM WebView tương thích API cũ: đặt tiền mặt/chuyển khoản, báo nhân viên, tải lại đơn khi không có `AbortSignal.timeout`. |
+| App Android | PASS biên dịch Java và kiểm chứng APK; URL máy chủ HTTPS được lưu cục bộ sau khi `/api/health` trả RC5, D1, display, auto print sẵn sàng. |
+| Màn hình khách Android | Logic tự chọn display phụ, tạo `Presentation`, ghép lại trước hạn 12 giờ; API snapshot được kiểm qua D1 cục bộ. Đã sửa refresh khi một POS khác thay đổi đơn đang mở. EXE ASUS có bước thử overlay ảo và chụp ảnh. **Chưa chạy overlay trong môi trường này và chưa thử màn hình khách vật lý.** |
+| Server Cloudflare thật | **CHƯA KIỂM ĐƯỢC**: web/browser chặn domain `workers.dev` (`ERR_BLOCKED_BY_CLIENT`), terminal proxy timeout. Không thực hiện POST/UPDATE lên D1 Cloudflare thật và không có bằng chứng Worker đang chạy RC5. Ảnh trước đây cho thấy `/api/staff/customers` và `/api/staff/paid-labels` trả 404. Cần triển khai Worker RC5 và migration `0014_customers.sql`, rồi thử lệnh ghi/đọc trên máy ASUS. |
+| In tự động | Trong app native, nút xác nhận PAID gọi PrintEngine; engine đọc lại PAID từ D1, gửi tem USB riêng → phiếu bếp/cắt trên máy in đơn USB → hóa đơn/cắt trên cùng máy. Nếu bếp chưa gửi thành công, giữ hóa đơn để chờ kiểm tra và thử lại; không có nút xác nhận in thêm. Job PAID từ POS khác được poll khoảng 3 giây/lần khi đăng nhập. |
+| Giả lập không có máy in | PASS: host JVM chạy `PrintFlowSimulation` và ghi trace: tem → bếp/cắt → hóa đơn/cắt; khi giả lập mất kết nối USB thì hóa đơn không bị gửi trước phiếu bếp. Nút **Giả lập PAID** trong APK render byte ESC/POS/TSPL và hiển thị tình trạng USB mà không gửi lệnh; **chưa bấm nút này trên Android Emulator trong môi trường build hiện tại**. |
+| Thiết bị in và két thật | **CHƯA KIỂM THỬ**: hồ sơ máy quầy ghi hóa đơn và tem kết nối USB; KV804 LAN TCP 9100 còn là tuyến tùy chọn. Chọn VID/PID, cấp quyền USB và thử in giấy trên máy POS. |
+
+Luồng dữ liệu: quầy, POS cầm tay, trang QR và màn hình khách dùng cùng Cloudflare Worker HTTPS và D1 `pos_unified`. Android Counter giữ cục bộ cấu hình cùng SQLite hàng đợi in/chống in trùng theo từng máy chủ; hàng đợi cũ của origin mặc định vẫn được giữ khi nâng cấp APK. Đơn, sản phẩm, khách, thanh toán, tồn kho nằm ở DB trung tâm; không nhận đơn ngoại tuyến. Quầy hỏi API đơn mỗi 10 giây khi ở màn hình làm việc, báo phục vụ mỗi 5 giây, job in từ thiết bị khác mỗi 3 giây; màn hình khách đọc snapshot mỗi 3 giây. Server RC5 có API ghi sản phẩm, khách, kho, voucher, ca, đơn, thanh toán và API display; quầy có thêm giao diện quản lý mà POS cầm tay không có trong menu. Đây là kết quả kiểm mã nguồn và test cục bộ, không xác nhận bản đã deploy.
+
+Máy ASUS Windows: giải nén bộ test, đặt EXE cạnh APK rồi chạy `LotusPOS_Test_Windows_ASUS.exe`. Trong app Android Emulator mở **Thiết bị → Giả lập PAID** để xem byte/lệnh cắt và trạng thái thiếu USB; sau khi đăng nhập, quay lại EXE nhấn Enter. Ảnh và log nằm trong `%LOCALAPPDATA%\LotusPOSCounterTest\ket-qua`; có `man-hinh-hai-gia-lap.png` nếu Android Emulator bật được overlay thứ hai. Không dùng PowerShell. Ảnh máy ảo không thể xác nhận in giấy hay màn hình khách thật.
+
+Đối chiếu Cloudflare: `https://pos-unified.lgl247-ai.workers.dev/api/health` trả version Worker và cờ `d1/display/autoPrintReady`. Trong Cloudflare Dashboard, chọn D1 `pos_unified` → Console/Tables và chạy `SELECT name FROM d1_migrations ORDER BY id;` để kiểm tra có `0014_customers.sql`; health không công khai nội dung các bảng. Từ môi trường này domain Worker vẫn bị chặn, nên không khẳng định trạng thái deploy hoặc DB thật.

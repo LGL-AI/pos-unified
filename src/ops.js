@@ -2,7 +2,7 @@
 const H={'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
 const ok=(data,status=200)=>new Response(JSON.stringify({ok:true,...data}),{status,headers:H});
 const bad=(status,code,message)=>new Response(JSON.stringify({ok:false,code,message}),{status,headers:H});
-const VALID=['ORDER_VIEW','ORDER_EDIT','PAYMENT_CONFIRM','PRINT_KITCHEN','INVENTORY_VIEW','INVENTORY_MANAGE','REFUND_VIEW','REFUND_CREATE','STAFF_MANAGE','ROLE_MANAGE','SHIFT_MANAGE','ATTENDANCE_VIEW','CATALOG_MANAGE','VOUCHER_MANAGE'];
+const VALID=['ORDER_VIEW','ORDER_EDIT','PAYMENT_CONFIRM','PRINT_KITCHEN','INVENTORY_VIEW','INVENTORY_MANAGE','REFUND_VIEW','REFUND_CREATE','STAFF_MANAGE','CUSTOMER_MANAGE','ROLE_MANAGE','SHIFT_MANAGE','ATTENDANCE_VIEW','CATALOG_MANAGE','VOUCHER_MANAGE'];
 const uuid=x=>typeof x==='string'&&/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(x);
 const clean=(v,n=100)=>typeof v==='string'?v.trim().slice(0,n):'';
 const integer=n=>Number.isSafeInteger(n)&&n>0&&n<=100000000;

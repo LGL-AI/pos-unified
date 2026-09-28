@@ -74,3 +74,17 @@ test('counter LAN scanner receives a line and exposes it only to an authenticate
   const denied=await fetch(base+'/api/scans?after=0',{headers:{...headers,Authorization:'Bearer incorrect'}});assert.equal(denied.status,401);
  }finally{await bridge.close();await rm(dir,{recursive:true,force:true})}
 });
+
+test('kitchen bridge accepts only paid D1 slips and sends each job once',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'lotus-kitchen-test-')),port=42000+Math.floor(Math.random()*10000),configPath=join(dir,'settings.json');
+ const kitchenJob='kitchen:'+orderId+':1',sent=[];let paid=false;
+ await writeFile(configPath,JSON.stringify({cloudOrigin:origin,kitchenIp:'192.168.1.130',kitchenPort:9100}));
+ const remoteFetch=async()=>new Response(JSON.stringify({ok:true,order:{id:orderId,paymentStatus:paid?'PAID':'UNPAID'},jobs:[{id:kitchenJob,status:'PENDING'}]}),{status:200});
+ const bridge=await createBridge({port,configPath,jobsPath:join(dir,'jobs.json'),remoteFetch,sendKitchen:async bytes=>sent.push(bytes)});
+ const submit=()=>fetch(`http://127.0.0.1:${port}/api/jobs`,{method:'POST',headers:{Origin:origin,Authorization:'Bearer '+bridge.settings.token,'X-POS-Session':'staff-token-valid-for-bridge','Content-Type':'application/json'},body:JSON.stringify({type:'KITCHEN',id:kitchenJob,jobId:kitchenJob,orderId,image:png(560,8)})});
+ try{
+  let r=await submit();assert.equal(r.status,403);assert.equal(sent.length,0);
+  paid=true;r=await submit();assert.equal(r.status,200);assert.equal((await r.json()).state,'SENT');assert.equal(sent.length,1);
+  r=await submit();assert.equal((await r.json()).reused,true);assert.equal(sent.length,1);
+ }finally{await bridge.close();await rm(dir,{recursive:true,force:true})}
+});

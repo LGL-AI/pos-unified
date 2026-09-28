@@ -6,6 +6,7 @@ import {settingsStaff} from './settings.js';
 import {daily,analytics} from './reports.js';
 import {handleShiftOps} from './shift-ops.js';
 import {nextOrderCode,codeForMethod,codeForBill} from './order-code.js';
+import {handleCustomers} from './customers.js';
 const H={'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
 const result=(data,status=200)=>new Response(JSON.stringify({ok:true,...data}),{status,headers:H});
 const error=(status,code,message)=>new Response(JSON.stringify({ok:false,code,message}),{status,headers:H});
@@ -68,6 +69,12 @@ export async function handleStaff(req,env,deps){
    if(!allowed(actor,'ORDER_VIEW'))return error(403,'PERMISSION_DENIED','Không có quyền xem yêu cầu phục vụ');
    const {results:requests=[]}=await env.DB.prepare("SELECT s.id,s.order_id AS orderId,s.table_id AS tableName,s.created_at AS createdAt,o.code FROM pos_service_requests s JOIN qr_orders o ON o.id=s.order_id WHERE s.status='PENDING' AND o.payment_status!='PAID' AND o.status!='CANCELLED' ORDER BY s.created_at LIMIT 30").all();return result({requests});
   }
+  if(path==='/api/staff/paid-labels'&&method==='GET'){
+   if(!allowed(actor,'PRINT_KITCHEN'))return error(403,'PERMISSION_DENIED','Không có quyền in tem');
+   const since=new Date(Date.now()-7*86400000).toISOString();
+   const {results:rows=[]}=await env.DB.prepare("SELECT j.id,j.revision,j.kind,j.status,j.items_json,j.created_at,o.id AS order_id,o.code,o.table_id,o.paid_at FROM pos_kitchen_jobs j JOIN qr_orders o ON o.id=j.order_id JOIN pos_auto_print_config config ON config.id=1 WHERE o.payment_status='PAID' AND j.status!='VOID' AND j.created_at>=? AND j.created_at>=config.since_at ORDER BY j.created_at DESC LIMIT 100").bind(since).all();
+   return result({jobs:rows.map(x=>({id:x.id,revision:x.revision,kind:x.kind,status:x.status,createdAt:x.created_at,items:JSON.parse(x.items_json),order:{id:x.order_id,code:x.code,table:x.table_id,paidAt:x.paid_at}}))});
+  }
   const serviceAck=path.match(/^\/api\/staff\/service-requests\/([a-f0-9-]{36})\/ack$/i);
   if(serviceAck&&method==='POST'){
    if(!allowed(actor,'ORDER_VIEW'))return error(403,'PERMISSION_DENIED','Không có quyền xử lý yêu cầu');
@@ -89,6 +96,7 @@ export async function handleStaff(req,env,deps){
   const shiftOps=await handleShiftOps(req,env,actor,deps);if(shiftOps)return shiftOps;
   const management=await handleManagement(req,env,actor,deps);if(management)return management;
   const ops=await handleOps(req,env,actor,deps);if(ops)return ops;
+  const customers=await handleCustomers(req,env,actor,deps);if(customers)return customers;
   const permission=path.startsWith('/api/staff/jobs/')?'PRINT_KITCHEN':path.match(/^\/api\/staff\/bills\/.*\/pay$/)?'PAYMENT_CONFIRM':
    path==='/api/staff/orders'&&method==='GET'||/^\/api\/staff\/orders\/[0-9a-f-]{36}$/i.test(path)&&method==='GET'?'ORDER_VIEW':
    path.match(/^\/api\/staff\/orders\/[0-9a-f-]{36}\/pay$/i)?'PAYMENT_CONFIRM':
@@ -99,7 +107,7 @@ export async function handleStaff(req,env,deps){
    const baseCode=code?.replace(/(?:\sB|-?B)[1-9]\d*$/i,'');const {results:rows=[]}=await (code?env.DB.prepare('SELECT * FROM qr_orders WHERE code IN (?,?,?) ORDER BY created_at DESC LIMIT 1').bind(baseCode,codeForMethod(baseCode,'BANK'),codeForMethod(baseCode,'CASH')):env.DB.prepare('SELECT * FROM qr_orders ORDER BY created_at DESC LIMIT 100')).all();
    return result({orders:rows.map(deps.hydrate)});
   }
-  if(path==='/api/staff/members'&&method==='GET'){const phone=new URL(req.url).searchParams.get('phone')||'';if(!/^0\d{9,10}$/.test(phone))return error(400,'INVALID_PHONE','Nhập số điện thoại 10 hoặc 11 chữ số');const member=await env.DB.prepare('SELECT id,display_name,phone,points,spend,orders,last_visit,phone_verified FROM members WHERE phone=?').bind(phone).first();return result({member:member?{id:member.id,name:member.display_name,phone:member.phone,points:member.points,tier:tierFor(member.points),spend:member.spend,orders:member.orders,lastVisit:member.last_visit,phoneVerified:!!member.phone_verified}:null})}
+  if(path==='/api/staff/members'&&method==='GET'){const phone=new URL(req.url).searchParams.get('phone')||'';if(!/^0\d{9,10}$/.test(phone))return error(400,'INVALID_PHONE','Nhập số điện thoại 10 hoặc 11 chữ số');const member=await env.DB.prepare('SELECT id,display_name,phone,points,spend,orders,last_visit,phone_verified,tier_override FROM members WHERE phone=?').bind(phone).first();return result({member:member?{id:member.id,name:member.display_name,phone:member.phone,points:member.points,tier:member.tier_override||tierFor(member.points),spend:member.spend,orders:member.orders,lastVisit:member.last_visit,phoneVerified:!!member.phone_verified}:null})}
   if(path==='/api/staff/members/register'&&method==='POST')return deps.register(env,req);
   if(path==='/api/staff/members/login'&&method==='POST')return deps.login(env,req);
   if(path==='/api/staff/voucher'&&method==='POST'){const b=await deps.body(req),v=await deps.calculate(b,env),member=await memberById(env,b.memberId);if(b.memberId&&!member)return error(400,'INVALID_MEMBER','Không thấy hội viên');const offer=await resolveStaffVoucher(env,deps,b.voucherCode,v.subtotal,member);return result({...deps.priceTotals(v.subtotal,offer?.discount||0,await deps.getStore(env)),voucher:offer?.code||null})}

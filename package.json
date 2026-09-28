@@ -1,6 +1,6 @@
 {
   "name": "lotus-pos-cloud-d1",
-  "version": "2.6.0-rc.4",
+  "version": "2.6.0-rc.5",
   "private": true,
   "type": "module",
   "description": "Four Lotus POS UIs sharing one Cloudflare Worker and D1",

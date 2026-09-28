@@ -1,6 +1,8 @@
-# Lotus POS Unified · Echo Coffee 2.6.0-rc.4 (gói Cloudflare)
+> Bản thử RC5.1/P0.6: xem [RELEASE_RC5_1_QR_ANDROID.md](RELEASE_RC5_1_QR_ANDROID.md). APK versionCode 8 chờ Worker RC5.1 và D1 0014–0015; QR bàn ghi lượt mở trên D1 và khóa đúng bàn quét.
 
-Đọc [hướng dẫn đưa rc.4 lên Cloudflare](DEPLOY_CLOUDFLARE_RC4.md) trước khi đẩy source. **Phải xác nhận D1 thật đã áp 0001–0013 trước khi chạy workflow deploy.** Bản này ẩn UI quản lý license POC tại quầy; dữ liệu license và API cũ vẫn giữ để tương thích. Bộ 80 case khách mới và toàn suite chạy trên Node/SQLite, chưa phải UAT D1 và thiết bị thật.
+# Lotus POS Unified · Echo Coffee 2.6.0-rc.5.1 (gói Cloudflare)
+
+Đọc [hướng dẫn đưa RC5.1 lên Cloudflare và thử Android](RELEASE_RC5_1_QR_ANDROID.md) trước khi đẩy source. **D1 thật phải có 0001–0015 trước khi workflow deploy.** Bản này có QR bàn ghi lượt mở trên D1, Khách hàng dùng D1 và in hóa đơn, phiếu bếp, tem tự động sau xác nhận thanh toán tại quầy. Kiểm thử local không thay thế kiểm tra máy in thật ở tiệm.
 
 Đọc [phạm vi đã nối D1, chỗ POC còn thiếu và cách mở local](docs/ECHO_COFFEE_2.6_RC1.md) trước khi dùng bản thử này. Phần bên dưới mô tả nền 2.5.1 đã có trước gói Echo Coffee.
 
@@ -18,11 +20,13 @@ Bốn đường dẫn trên cùng Worker `pos-unified` và database `pos_unified
 | POS quầy | `/counter/` | Bán hàng, chủ tiệm cấu hình, kho, voucher, nhân viên, báo cáo, in quầy |
 | Màn hình thứ hai | `/display/` | Xem giỏ và khoản phải thu từ phiên ghép D1 |
 | POS cầm tay | `/staff/` hoặc APK riêng `vn.lotusai.pos.cloudpilot` | Gọi món, bếp, bill, kho, chấm công |
-| Khách quét QR | `/qr/?table=T01` | Chọn bàn/món, hội viên, voucher, QR thanh toán |
+| Khách quét QR | `/qr/?table=T01` | Ghi bàn lúc truy cập, gọi món tại bàn đã quét, hội viên, voucher, QR thanh toán |
 
 **Cài bằng trình duyệt, không nhập lệnh ở máy của bạn:** [DEPLOY_TUNG_BUOC.md](DEPLOY_TUNG_BUOC.md). Cần áp migration `0008_store_config.sql` **trước** khi cập nhật Worker 2.5.0. GitHub Action chạy `scripts/upgrade-d1-0008.mjs`, kiểm tra lịch sử/sơ đồ D1 và chỉ thêm cấu trúc còn thiếu. Khi D1 đã có 0008, upload Worker từ GitHub để Cloudflare tự build.
 
 Trong **POS quầy → Quản lý tiệm**, chủ tiệm đặt tên/địa chỉ/mã số thuế/logo/số bàn, BIN/tên ngân hàng/tài khoản/người nhận, tiền tố chuyển khoản, giá đã gồm thuế hoặc cộng thuế, thuế suất, link GitHub. Đơn chốt lưu ảnh chụp ngân hàng, thuế và ghi chú để thay đổi sau này không sửa tiền của đơn cũ. Nội dung VietQR phát sinh theo đơn và bill, gồm tiền, tài khoản và mã nhận diện riêng. Form **POS quầy → Thiết bị** lưu IP/port, LAN hoặc máy in Windows USB/Bluetooth cho XP-Q200 và XP-365B, kích két theo XP-Q200, máy quét HID hoặc LAN TCP. Cầu in cài trên máy Windows tại quầy, không đặt IP và mã ghép trên GitHub. Máy SUNMI cầm tay vẫn dùng máy in tích hợp và máy bếp LAN do APK cài riêng, không gửi lệnh sang cầu in quầy. Chi tiết tại [hướng dẫn thiết bị](docs/IN_QUAY_XPRINTER.md).
+
+**POS quầy bản web → Thiết bị → Bridge máy in POS web:** ON (mặc định) in/mở két theo quy trình; OFF dùng để trình diễn trên trình duyệt mà không gửi lệnh in hoặc mở két từ trình duyệt đó. Công tắc lưu cục bộ theo trình duyệt, không làm thay đổi APK POS quầy Android 11 hoặc APK Sunmi V2s. OFF **vẫn tạo đơn, khách hàng và thanh toán thật trên Cloudflare D1**, màn hình thứ hai vẫn đồng bộ; các máy khác nối chung D1 vẫn có thể tự in. Khi bật ON, trình duyệt này không tự in bù các phiếu đã thanh toán trước lúc bật. Không dùng OFF như môi trường dữ liệu thử nghiệm riêng.
 
 Nhân viên có thể tách 2 đến số phần món thành từng bill rồi gộp **hai bill chưa thanh toán cùng đơn**; bill đã trả không thể gộp. Dashboard và CSV dùng thanh toán của từng bill, theo ngày Việt Nam, riêng hoàn tiền thuộc ngày thực trả. Mã license POC `XXXX-XXXX-XXXX-XXXX` băm trên D1, che đầy đủ mã khi đọc; trạng thái hết hạn POC chỉ mô phỏng, không khóa bán hàng.
 

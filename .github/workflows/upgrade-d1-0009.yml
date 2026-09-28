@@ -1,6 +1,6 @@
 name: Upgrade Lotus POS D1 0009 - Sales independent from inventory
 
-"on":
+on:
   workflow_dispatch:
 
 permissions:

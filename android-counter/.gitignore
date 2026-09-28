@@ -1,0 +1,4 @@
+build/
+dist/
+app/src/main/assets/staff.js
+*.jks

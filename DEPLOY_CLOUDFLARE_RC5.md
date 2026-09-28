@@ -1,0 +1,12 @@
+> Bản RC5.1 hiện tại: xem [RELEASE_RC5_1_QR_ANDROID.md](RELEASE_RC5_1_QR_ANDROID.md). Tài liệu dưới đây chỉ lưu hướng dẫn RC5 cũ.
+
+# Đưa Lotus POS 2.6.0-rc.5 lên Cloudflare
+
+Đây là bản tiếp theo của rc.4. D1 thật của tiệm đã có `0001` đến `0013`; nâng **0014** trước khi phát hành Worker rc.5. Giữ nguyên database `pos_unified` và dữ liệu cũ.
+
+1. Trên GitHub, tạo `migrations/0014_customers.sql` với nội dung trong gói này. Tạo thủ công `.github/workflows/upgrade-d1-0014.yml` bằng **Add file → Create new file**, dán đúng nội dung và commit. Trong **Actions**, chọn **Upgrade Lotus POS D1 0014 Customers → Run workflow**. Chờ bước “Verify all 14 migrations” xanh. Workflow dùng secret `CLOUDFLARE_D1_API_TOKEN` hiện có; nếu schema 0014 đã có một phần, workflow dừng để kiểm tra thay vì chạy lặp.
+2. Đưa source rc.5 vào gốc repo, giữ nguyên cấu trúc `src/`, `public/`, `bridge/`, `migrations/`, `scripts/`. Tạo thủ công `.github/workflows/deploy-cloudflare-rc5.yml` bằng cùng cách. Vào **Actions → Deploy Lotus POS rc.5 to Cloudflare → Run workflow**. Cần secret `CLOUDFLARE_POS_DEPLOY_TOKEN` đã dùng cho rc.4. Bước deploy kiểm 14 migration, test, phát hành Worker và health `2.6.0-rc.5`.
+3. Trên **máy Windows tại quầy**, cập nhật thư mục `bridge/` của gói mới, giữ lại `bridge/config.local.json` và `bridge/jobs.local.json` đang dùng (không đưa hai file này lên GitHub). Khởi động lại `bridge/start-counter.cmd`; mở `http://127.0.0.1:18181/setup` để điền IP/port LAN máy bếp KV804, tên hoặc IP máy tem XP-365B, và Q200. Trong [POS quầy](https://pos-unified.lgl247-ai.workers.dev/counter/) → **Thiết bị**, kiểm tra cầu in đã ghép, giữ trình duyệt quầy mở trong ca.
+4. Kiểm một đơn thử: **xác nhận đã thu tiền** → Q200 in hóa đơn; KV804 in phiếu bếp; XP-365B in mỗi món một tem. Với tiền mặt, két cũng mở. Đơn trả trên APK SUNMI tiếp tục dùng máy in hóa đơn và bếp của APK; tem được máy quầy gửi khi trang quầy đang chạy, thường ở lượt kiểm tra tiếp theo sau khoảng 12 giây. Màn **Khách hàng** ở sidebar quầy dùng bảng `members` D1: số đơn, chi tiêu và điểm từ đơn đã thanh toán; email, ngày sinh, ghi chú và hạng được lưu trên hồ sơ ấy.
+
+Lệnh in đã gửi được cầu in ghi theo mã cố định để tránh tự in lại sau mất kết nối; `UNKNOWN` cần kiểm giấy và máy trước khi bấm in lại. Cloudflare không thể tự chạm vào máy in USB/LAN trong cửa hàng; dịch vụ `bridge/` trên Windows phải chạy. Trang `/staff/` mở thuần bằng trình duyệt không có máy in native; muốn in tự động từ quầy dùng `/counter/`, còn cầm tay dùng APK SUNMI và mở trang quầy để nhận tem.

@@ -9,12 +9,17 @@ const requireReady=(condition,message)=>{if(!condition)throw Error(message)};
 // Read-only gate. The 0009 upgrade must use its dedicated resumable script.
 export async function checkD1(query){
  const history=(await query('SELECT name FROM d1_migrations ORDER BY id')).map(x=>x.name);
- requireReady(history.length===migrations.length&&history.every((name,i)=>name===migrations[i]),`D1 chưa đủ migration 0001–0013. Hiện có: ${history.join(', ')||'(trống)'}`);
+ requireReady(history.length===migrations.length&&history.every((name,i)=>name===migrations[i]),`D1 chưa đủ migration 0001–0015. Hiện có: ${history.join(', ')||'(trống)'}`);
  const fields=await query('PRAGMA table_info(qr_orders)');
  requireReady(fields.some(x=>x.name==='payment_preference'),'D1 thiếu cột payment_preference trong qr_orders');
+ const memberFields=await query('PRAGMA table_info(members)');
+ requireReady(['email','birthday','note','tier_override','version'].every(x=>memberFields.some(y=>y.name===x)),'D1 thiếu cột hồ sơ khách hàng 0014');
  const store=await query('SELECT id FROM pos_store_config WHERE id=1');
  requireReady(store.length===1,'D1 thiếu cấu hình cửa tiệm');
  await query('SELECT id FROM pos_service_requests LIMIT 1');
+ const printConfig=await query('SELECT since_at FROM pos_auto_print_config WHERE id=1');
+ requireReady(printConfig.length===1,'D1 thiếu mốc chống in lại phiếu cũ');
+ await query('SELECT table_id,views FROM qr_table_visits LIMIT 1');
  await query('SELECT id FROM pos_shift_tasks LIMIT 1');
  await query('SELECT option_code FROM pos_menu_options LIMIT 1');
  const menu=await query("SELECT COUNT(*) AS n FROM pos_products WHERE id LIKE 'EC_%' AND active=1");

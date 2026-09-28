@@ -15,7 +15,7 @@ test('four UI routes share the same Worker; paired display reads only server-cal
  for(const p of ['/counter/','/display/','/staff/','/qr/?table=T01'])assert.equal((await ask(p)).status,200,p);
  assert.match((await ask('/counter/')).headers.get('Content-Security-Policy'),/http:\/\/127\.0\.0\.1:18181/);
  assert.doesNotMatch((await ask('/qr/')).headers.get('Content-Security-Policy'),/127\.0\.0\.1/);
- const health=await ask('/api/health');assert.equal(health.data.version,'2.6.0-rc.4');assert.equal(health.data.display,'ok');assert.equal(health.data.acceptingOrders,true);
+ const health=await ask('/api/health');assert.equal(health.data.version,'2.6.0-rc.5.1');assert.equal(health.data.display,'ok');assert.equal(health.data.autoPrintReady,true);assert.equal(health.data.qrTableReady,true);assert.equal(health.data.acceptingOrders,true);
  assert.equal((await ask('/api/staff/display','POST',{})).status,401);
  const login=await ask('/api/staff/login','POST',{username:'huang',password:env.POS_STAFF_PASSWORD}),auth={Authorization:'Bearer '+login.data.token};assert.equal(login.status,200);
  const paired=await ask('/api/staff/display','POST',{},auth);assert.equal(paired.status,201);
@@ -31,6 +31,16 @@ test('four UI routes share the same Worker; paired display reads only server-cal
  await ask('/api/staff/display/'+pid,'PUT',{orderId:order.id,revision:3},auth);
  const publicPaid=await ask('/api/display/'+pid,'GET',undefined,{'X-Display-Token':tok});assert.equal(publicPaid.data.snapshot.paymentStatus,'PAID');assert.equal(publicPaid.data.snapshot.bankPayment,null);
  const summary=await ask('/api/staff/summary','GET',undefined,auth);assert.equal(summary.data.summary.paidOrders,1);assert.equal(summary.data.summary.gross,260000);
+ // The QR phone, handheld/staff API and Android customer display read the same order row.
+ const qr=await ask('/api/orders','POST',{table:'T02',items:[{productId:'101',qty:1}],idempotencyKey:'qr_android_display_00001'});assert.equal(qr.status,201,JSON.stringify(qr.data));
+ const list=await ask('/api/staff/orders','GET',undefined,auth);assert.ok(list.data.orders.some(x=>x.id===qr.data.order.id&&x.source==='QR'));
+ assert.equal((await ask('/api/staff/display/'+pid,'PUT',{orderId:qr.data.order.id,revision:4},auth)).status,200);
+ const qrScreen=await ask('/api/display/'+pid,'GET',undefined,{'X-Display-Token':tok});assert.equal(qrScreen.data.snapshot.code,qr.data.order.code);assert.equal(qrScreen.data.snapshot.total,qr.data.order.total);
+ const accepted=await ask('/api/staff/orders/'+qr.data.order.id+'/accept','POST',{version:qr.data.order.version},auth);assert.equal(accepted.status,200,JSON.stringify(accepted.data));
+ const qrPaid=await ask('/api/staff/orders/'+qr.data.order.id+'/pay','POST',{version:accepted.data.order.version,method:'BANK'},auth);assert.equal(qrPaid.status,200,JSON.stringify(qrPaid.data));
+ const phone=await ask('/api/orders/'+qr.data.order.id,'GET',undefined,{'x-order-token':qr.data.orderToken});assert.equal(phone.data.order.paymentStatus,'PAID');
+ assert.equal((await ask('/api/staff/display/'+pid,'PUT',{orderId:qr.data.order.id,revision:5},auth)).status,200);
+ const screenPaid=await ask('/api/display/'+pid,'GET',undefined,{'X-Display-Token':tok});assert.equal(screenPaid.data.snapshot.paymentStatus,'PAID');assert.equal(screenPaid.data.snapshot.bankPayment,null);
  assert.equal((await ask('/api/staff/display/'+pid,'DELETE',undefined,auth)).status,200);
  assert.equal((await ask('/api/display/'+pid,'GET',undefined,{'X-Display-Token':tok})).status,403);
  db.close();

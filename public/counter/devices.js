@@ -4,9 +4,10 @@ const base='http://127.0.0.1:18181';
 const key='lotus-cloud:counter-bridge-token';
 function token(){try{return localStorage.getItem(key)||''}catch{return ''}}
 function pair(value){if(!/^[a-f0-9]{64}$/.test(value))throw Error('Mã ghép phải gồm 64 ký tự từ trang cầu in');localStorage.setItem(key,value)}
+async function timedFetch(url,options,timeout){const controller=typeof AbortController==='function'?new AbortController():null,timer=controller?setTimeout(()=>controller.abort(),timeout):null;try{return await fetch(url,{...options,...(controller?{signal:controller.signal}:{})})}finally{if(timer!==null)clearTimeout(timer)}}
 async function call(path,method='GET',value,staffToken=''){
  if(!token())throw Error('Chưa ghép cầu in. Vào Thiết bị để nhập mã ghép từ máy quầy.');
- let response;try{response=await fetch(base+path,{method,headers:{Authorization:'Bearer '+token(),...(value?{'Content-Type':'application/json'}:{}),...(staffToken?{'X-POS-Session':staffToken}:{})},body:value?JSON.stringify(value):undefined,cache:'no-store',signal:AbortSignal.timeout(15000)})}
+ let response;try{response=await timedFetch(base+path,{method,headers:{Authorization:'Bearer '+token(),...(value?{'Content-Type':'application/json'}:{}),...(staffToken?{'X-POS-Session':staffToken}:{})},body:value?JSON.stringify(value):undefined,cache:'no-store'},15000)}
  catch{throw Error('Không kết nối được cầu in trên máy quầy. Kiểm tra cửa sổ cầu in và cho phép truy cập mạng cục bộ của trình duyệt. Kiểm tra giấy trước khi gửi lại.')}let data;try{data=await response.json()}catch{throw Error('Cầu in trả về dữ liệu không hợp lệ')}
  if(!response.ok||!data.ok)throw Error(data.message||'Cầu in từ chối lệnh');return data;
 }
@@ -38,6 +39,9 @@ function receipt(p){const currency=x=>new Intl.NumberFormat('vi-VN').format(Numb
  lines.push({text:'---------------------------------------------',size:17},{text:'Tổng số món: '+(p.items||[]).reduce((n,x)=>n+Number(x.qty||0),0)},{text:'Thành tiền: '+currency(p.subtotal)},{text:'Giảm giá: -'+currency(p.discount)},{text:(p.taxMode==='INCLUSIVE'?'Thuế đã gồm: ':'Thuế cộng thêm: ')+currency(p.taxAmount)},{text:'TỔNG TIỀN: '+currency(p.total),size:26,bold:true},{text:'Đã hoàn: '+currency(p.refundedAmount)},{text:'Thanh toán: '+(p.paymentMethod==='BANK'?'Chuyển khoản (CK)':'Tiền mặt (TM)')},{text:'Đã nhận: '+currency(p.received)},{text:'Tiền thối: '+currency(p.change)},{text:p.memberName?'Hội viên: '+p.memberName:'Khách lẻ',size:17},{text:'Cảm ơn quý khách đã ghé Echo Coffee!',center:true,space:8});
  const extras=[];if(p.feedbackUrl)extras.push({kind:'QR',value:p.feedbackUrl,caption:'Quét QR góp ý / đánh giá dịch vụ'});return image(lines,560,undefined,extras)
 }
+function kitchen(job,order){const lines=[{text:'PHIẾU BẾP · 厨房订单',size:28,bold:true,center:true},{text:order.code+' · '+order.table,size:23,bold:true,center:true},{text:'Phiếu '+job.revision+' · '+job.kind,size:18,center:true},{text:new Date(job.createdAt).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'}),size:16,center:true},{text:'---------------------------------------------',size:17}];
+ for(const item of job.items){lines.push({text:item.name+' × '+item.qty,size:23,bold:true});if(item.nameCn)lines.push({text:item.nameCn,size:18});const m=item.mods||{};const options=Object.values(m.options||{}).flatMap(a=>Array.isArray(a)?a.map(x=>typeof x==='string'?x:x.name||x.code):[]);const modifiers=[m.size,m.spice,...options,m.note].filter(Boolean).join(' · ');if(modifiers)lines.push({text:modifiers,size:18,space:7})}
+ lines.push({text:'---------------------------------------------',size:17},{text:order.code,size:18,center:true});return image(lines,560,undefined,[{kind:'BARCODE',value:order.code}])}
 function labels(job,order,size){const out=[];const width=size.labelWidth*8,height=size.labelHeight*8;if(height<240)throw Error('Tem cần cao từ 30 mm để đủ mã đơn, món và barcode');
  for(const item of job.items){for(let n=0;n<item.qty;n++){
   if(out.length>=60)throw Error('Phiếu vượt 60 tem; chia phiếu nhỏ hơn rồi in');
@@ -45,5 +49,5 @@ function labels(job,order,size){const out=[];const width=size.labelWidth*8,heigh
   out.push(image([{text:order.code+' · '+order.table,size:18,bold:true},{text:item.name,size:22,bold:true},{text:mods||' ',size:14},{text:`Món ${n+1}/${item.qty} · Phiếu ${job.revision}`,size:14}],width,height,[{kind:'BARCODE',value:order.code}]));
  }}return out;
 }
-window.LotusCounterDevices={token,pair,status:()=>call('/api/status'),config:(staff,settings)=>call('/api/config',settings?'PUT':'GET',settings,staff),scans:(staff,after)=>call('/api/scans?after='+Number(after||0),'GET',undefined,staff),send:(job,staff)=>call('/api/jobs','POST',job,staff),receipt,labels,base};
+window.LotusCounterDevices={token,pair,status:()=>call('/api/status'),config:(staff,settings)=>call('/api/config',settings?'PUT':'GET',settings,staff),scans:(staff,after)=>call('/api/scans?after='+Number(after||0),'GET',undefined,staff),send:(job,staff)=>call('/api/jobs','POST',job,staff),receipt,labels,kitchen,base};
 })();

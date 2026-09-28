@@ -4,3 +4,4 @@
 #service-request-alert{position:fixed;right:22px;top:83px;z-index:220;width:min(410px,calc(100vw - 44px));background:#fff9e6;color:#542b17;border:2px solid #d39839;border-radius:15px;padding:18px;box-shadow:0 12px 40px #0004;font-size:15px}
 #service-request-alert strong{font-size:19px}#service-request-alert p{font-size:13px}#service-request-alert .buttons{display:flex;gap:9px}#service-request-alert button{min-width:120px}
 #lotus-print-ticket .ticket-code-img{width:100%;max-height:80px;object-fit:contain}#lotus-print-ticket .ticket-qr-img{display:block;width:34mm;height:34mm;margin:5mm auto}#lotus-print-ticket>p{text-align:center}
+.customer-table{width:100%;border-collapse:collapse;min-width:720px}.customer-table th,.customer-table td{text-align:left;border-bottom:1px solid #d8e1e5;padding:10px 8px}.customer-table th{color:#365767;background:#f0f5f6}.customer-table td:nth-child(5){white-space:nowrap}
