@@ -15,6 +15,8 @@ final class Config {
     int number(String key,int fallback) { try { return Integer.parseInt(get(key,""+fallback)); } catch(Exception e) { return fallback; } }
     boolean enabled(String key,boolean fallback) { return Boolean.parseBoolean(get(key,""+fallback)); }
     void set(String key,String value) { p.edit().putString(key,value).apply(); }
+    String layoutProfile() { String id=get("layoutProfile",LayoutProfiles.DEFAULT);return LayoutProfiles.valid(id)?id:LayoutProfiles.DEFAULT; }
+    void setLayoutProfile(String id) { if(!LayoutProfiles.valid(id))throw new IllegalArgumentException("Cấu hình màn hình không hợp lệ");set("layoutProfile",id); }
     String origin() { try { return validOrigin(get("serverOrigin",DEFAULT_ORIGIN)); } catch(IllegalArgumentException e) { return DEFAULT_ORIGIN; } }
     void setOrigin(String value) { set("serverOrigin",validOrigin(value)); }
     String serverSuffix() {

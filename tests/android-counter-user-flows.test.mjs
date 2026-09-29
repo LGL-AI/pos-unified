@@ -16,7 +16,7 @@ test('Android 11 cashier creates a product and customer, opens hardware settings
  class FakeFormData{constructor(form){this.values=form.values||{}}*entries(){yield* Object.entries(this.values)}}
  const context={document,localStorage:{getItem:key=>local.get(key)||null,setItem:(key,value)=>local.set(key,value),removeItem:key=>local.delete(key)},sessionStorage:{getItem:key=>session.get(key)||null,setItem:(key,value)=>session.set(key,value),removeItem:key=>session.delete(key)},location:{origin:'https://counter.test'},navigator:{},crypto,Response,Request,URL,FormData:FakeFormData,Intl,JSON,Number,Array,String,Math,Date,console,AbortController,AbortSignal:{},setTimeout:(fn,ms)=>ms===7000?0:setTimeout(fn,ms),clearTimeout,setInterval:(fn,ms)=>{intervals.set(ms,fn);return ms},confirm:()=>true,prompt:(_,value)=>value??'',fetch:(path,options={})=>worker.fetch(new Request('https://counter.test'+path,{method:options.method||'GET',headers:{Origin:'https://counter.test',...options.headers},body:options.body}),env)};
  context.window=context;
- context.LotusNative={displayDraft:(draft)=>calls.drafts.push(draft),displaySession(){},displayOrder(){},paymentRecorded:(order)=>calls.paidRecords.push(order),syncPaidJob:(order,job)=>calls.paidJobs.push({order,job}),getDisplays:()=> '[]',openSettings:()=>{calls.settings++},printQueue:()=> '[]'};
+ context.LotusNative={displayDraft:(draft)=>calls.drafts.push(draft),displaySession(){},displayOrder(){},paymentRecorded:(order)=>calls.paidRecords.push(order),syncPaidJob:(order,job)=>calls.paidJobs.push({order,job}),getDisplays:()=> '[]',reconnectDisplay:()=>{calls.reconnect=(calls.reconnect||0)+1},openSettings:()=>{calls.settings++},printQueue:()=> '[]'};
  vm.createContext(context);vm.runInContext(readFileSync(new URL('../public/staff/staff.js',import.meta.url),'utf8'),context);
  assert.ok(local.get('lotus-cloud:android-paid-since'),'Save the first Android launch time before any server connection');
  assert.ok(intervals.has(3000),'Android counter checks paid remote jobs every 3 seconds');
@@ -28,11 +28,18 @@ test('Android 11 cashier creates a product and customer, opens hardware settings
  await new Promise(resolve=>setTimeout(resolve,10));
  await listeners.submit({target:{id:'login',password:{value:env.POS_STAFF_PASSWORD},username:{value:'huang'}},preventDefault(){}});
  assert.match(app.innerHTML,/Giỏ món/);
+ const salesNav=app.innerHTML.match(/<nav aria-label="Điều hướng POS">[\s\S]*?<\/nav>/)?.[0]||'';
+ assert.deepEqual([...salesNav.matchAll(/data-screen="([^"]+)"/g)].map(x=>x[1]),['new','orders','storetools']);
+ await click({screen:'storetools'});assert.match(app.innerHTML,/data-screen="products"/);assert.match(app.innerHTML,/data-screen="vouchers"/);
+ await click({screen:'display'});assert.match(app.innerHTML,/Chưa thấy màn hình phụ/);assert.match(app.innerHTML,/Apply Changes/);
+ context.LotusNative.getDisplays=()=>JSON.stringify([{id:0,name:'Primary',width:1920,height:1200,presentation:false},{id:1,name:'Display 1',width:1280,height:720,presentation:true}]);
+ await click({action:'android-display-reconnect'});assert.equal(calls.reconnect,1);assert.match(app.innerHTML,/Đã nhận 1 màn hình khách/);assert.match(app.innerHTML,/1280 × 720/);
  nav.scrollLeft=520;nav.scrollTop=33;
  await click({screen:'products'});
  assert.equal(nav.scrollLeft,520,'Bottom menu keeps its horizontal position after render');
  assert.equal(nav.scrollTop,33,'Side menu keeps its vertical position after render');
  assert.ok(app.innerHTML.indexOf('id="product-form"')<app.innerHTML.indexOf('class="poc-table"'),'Android editor must be above the long product table');
+ assert.match(app.innerHTML,/商品编号（创建后不可改）/);
  await click({action:'product-new'});
  await submit('product-form',{id:'ANDROID11',sku:'ANDROID11',name:'Món thử Android',nameCn:'安卓测试',category:'Đồ uống',station:'BAR',price:'18000',largePrice:'22000',icon:'🥤',size:true,spicy:false,active:true,recipe:''});
  assert.equal(db.prepare('SELECT price FROM pos_products WHERE id=?').get('ANDROID11').price,18000);
@@ -112,5 +119,13 @@ test('Android 11 cashier creates a product and customer, opens hardware settings
  await remote('/api/staff/schedules','POST',{staffId:'OWNER',workDate,startTime:'19:13',endTime:'20:17',note:'REMOTE-ROSTER-AUDIT'});
  await intervals.get(10000)();
  assert.match(app.innerHTML,/REMOTE-ROSTER-AUDIT/,'An open roster updates after another terminal assigns a shift');
+ await click({screen:'vouchers'});await new Promise(resolve=>setTimeout(resolve,200));assert.match(app.innerHTML,/最高减免（0 为不限）/);assert.match(app.innerHTML,/保存优惠券|新建优惠券/);
+ const onlineFetch=context.fetch;
+ context.fetch=(path,options)=>path==='/api/staff/me'?Promise.resolve(new Response('<html>Bad gateway</html>',{status:502,headers:{'Content-Type':'text/html'}})):onlineFetch(path,options);
+ await click({action:'refresh'});
+ assert.match(app.innerHTML,/HTTP 502.*\/api\/staff\/me/,'A non-JSON response identifies the failing API without hiding the HTTP status');
+ context.fetch=onlineFetch;
+ await click({action:'refresh'});
+ assert.doesNotMatch(app.innerHTML,/HTTP 502.*\/api\/staff\/me/,'A successful refresh clears the transient error');
  db.close();
 });

@@ -1,0 +1,64 @@
+/* Applies only to the Android cashier WebView. The customer display is separate. */
+html[data-counter-profile^="portrait-"] body[data-mode="counter"] header,
+html[data-counter-profile^="portrait-"] body[data-mode="counter"] #app{margin-left:0}
+html[data-counter-profile^="portrait-"] body[data-mode="counter"] #app{padding:12px 14px 112px}
+html[data-counter-profile^="portrait-"] body[data-mode="counter"] nav{
+  top:auto;bottom:0;left:0;right:0;width:100%;height:auto;max-height:82px;
+  display:flex;flex-direction:row;gap:0;padding:4px;overflow-x:auto;overflow-y:hidden;
+}
+html[data-counter-profile^="portrait-"] body[data-mode="counter"] nav .nav-brand,
+html[data-counter-profile^="portrait-"] body[data-mode="counter"] nav .nav-footer,
+html[data-counter-profile^="portrait-"] body[data-mode="counter"] nav .nav-heading{display:none}
+html[data-counter-profile^="portrait-"] body[data-mode="counter"] nav button{
+  flex:1 1 0;width:auto;min-width:0;min-height:62px;text-align:center;padding:8px 4px;font-size:12px;
+}
+html[data-counter-profile^="portrait-"] body[data-mode="counter"] .counter-grid{display:block}
+html[data-counter-profile^="portrait-"] body[data-mode="counter"] .card-sticky{position:static;max-height:none;overflow:visible}
+html[data-counter-profile^="portrait-"] body[data-mode="counter"] .productGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+html[data-counter-profile^="portrait-"] body[data-mode="counter"] .admin-grid{grid-template-columns:minmax(0,1fr)}
+html[data-counter-profile^="portrait-"] body[data-mode="counter"] .admin-grid form{max-height:none;overflow:visible}
+html[data-counter-profile^="portrait-"] body[data-mode="counter"] .dash-grid,
+html[data-counter-profile^="portrait-"] body[data-mode="counter"] .week-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+html[data-counter-profile="portrait-compact"] body[data-mode="counter"] .pos-orderbar{grid-template-columns:minmax(0,1fr)}
+html[data-counter-profile="portrait-compact"] body[data-mode="counter"] .pos-orderbar .muted{grid-column:1}
+html[data-counter-profile="portrait-standard"] body[data-mode="counter"] .pos-orderbar,
+html[data-counter-profile="portrait-large"] body[data-mode="counter"] .pos-orderbar{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media(max-width:550px){
+  html[data-counter-profile="portrait-standard"] body[data-mode="counter"] .pos-orderbar,
+  html[data-counter-profile="portrait-large"] body[data-mode="counter"] .pos-orderbar{grid-template-columns:minmax(0,1fr)}
+  html[data-counter-profile="portrait-standard"] body[data-mode="counter"] .pos-orderbar .muted,
+  html[data-counter-profile="portrait-large"] body[data-mode="counter"] .pos-orderbar .muted{grid-column:1}
+}
+
+html[data-counter-profile$="-compact"] body[data-mode="counter"]{font-size:14px}
+html[data-counter-profile$="-compact"] body[data-mode="counter"] .card{padding:12px}
+html[data-counter-profile$="-compact"] body[data-mode="counter"] .productGrid{gap:8px}
+html[data-counter-profile$="-compact"] body[data-mode="counter"] .productGrid button{min-height:132px;padding:10px}
+html[data-counter-profile$="-compact"] body[data-mode="counter"] .product-title{font-size:13px}
+html[data-counter-profile$="-compact"] body[data-mode="counter"] button{min-height:44px}
+html[data-counter-profile="landscape-compact"] body[data-mode="counter"] nav{width:190px;padding:14px 9px}
+html[data-counter-profile="landscape-compact"] body[data-mode="counter"] header,
+html[data-counter-profile="landscape-compact"] body[data-mode="counter"] #app{margin-left:190px}
+@media(max-width:1050px){
+  html[data-counter-profile="landscape-compact"] body[data-mode="counter"] .counter-grid{display:block}
+  html[data-counter-profile="landscape-compact"] body[data-mode="counter"] .card-sticky{position:static;max-height:none;overflow:visible}
+}
+@media(max-width:800px){
+  html[data-counter-profile="landscape-compact"] body[data-mode="counter"] nav{width:100%;padding:4px}
+  html[data-counter-profile="landscape-compact"] body[data-mode="counter"] header,
+  html[data-counter-profile="landscape-compact"] body[data-mode="counter"] #app{margin-left:0}
+}
+
+html[data-counter-profile$="-large"] body[data-mode="counter"]{font-size:17px}
+html[data-counter-profile$="-large"] body[data-mode="counter"] .card{padding:22px}
+html[data-counter-profile$="-large"] body[data-mode="counter"] button{min-height:52px;font-size:16px}
+html[data-counter-profile$="-large"] body[data-mode="counter"] input,
+html[data-counter-profile$="-large"] body[data-mode="counter"] select{min-height:48px}
+html[data-counter-profile$="-large"] body[data-mode="counter"] .productGrid button{min-height:174px}
+html[data-counter-profile$="-large"] body[data-mode="counter"] .product-title{font-size:17px}
+html[data-counter-profile="portrait-large"] body[data-mode="counter"] nav button{min-height:64px;font-size:13px}
+@media(min-width:1151px){
+  html[data-counter-profile="landscape-large"] body[data-mode="counter"] nav{width:265px}
+  html[data-counter-profile="landscape-large"] body[data-mode="counter"] header,
+  html[data-counter-profile="landscape-large"] body[data-mode="counter"] #app{margin-left:265px}
+}

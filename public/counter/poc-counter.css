@@ -61,6 +61,11 @@ body[data-mode="counter"] nav .nav-footer{
   color:#cbd5e1;font-size:12px;line-height:1.6;margin-top:18px;
 }
 body[data-mode="counter"] nav .nav-footer small{font-size:11px;color:#94a3b8}
+body[data-mode="counter"] nav .nav-heading{color:#94a3b8;font-size:11px;font-weight:800;letter-spacing:.07em;padding:10px 13px 2px}
+body[data-mode="counter"] .store-tools-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:16px 0}
+body[data-mode="counter"] .store-tools-grid .store-tool{display:block;text-align:left;min-height:86px;padding:17px;border-radius:15px;background:#fff;border:1px solid var(--line);box-shadow:var(--shadow)}
+body[data-mode="counter"] .store-tool strong,body[data-mode="counter"] .store-tool small{display:block;line-height:1.4}
+body[data-mode="counter"] .store-tool small{color:var(--muted);font-size:12px;margin-top:4px}
 body[data-mode="counter"] .card{
   background:var(--panel);border:1px solid var(--line);
   border-radius:18px;box-shadow:var(--shadow);padding:18px;margin:12px 0;
@@ -189,19 +194,29 @@ body[data-mode="counter"] .week-stats strong{display:block;font-size:20px}
   body[data-mode="counter"] .productGrid{grid-template-columns:repeat(3,minmax(0,1fr))}
   body[data-mode="counter"] .dash-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
-@media(max-width:1150px){
+@media (min-width:801px) and (max-width:1150px){
+  body[data-mode="counter"] nav{width:205px;padding:18px 10px}
+  body[data-mode="counter"] nav button{font-size:13px}
+  body[data-mode="counter"] header,body[data-mode="counter"] #app{margin-left:205px}
+  body[data-mode="counter"] .counter-grid{grid-template-columns:minmax(0,1fr) minmax(260px,.75fr);gap:12px}
+  body[data-mode="counter"] .card-sticky{top:12px}
+  body[data-mode="counter"] .pos-orderbar{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:800px){
   body[data-mode="counter"] header{margin-left:0}
   body[data-mode="counter"] #app{margin-left:0;padding:14px 14px 110px}
   body[data-mode="counter"] nav{top:auto;bottom:0;right:0;width:100%;height:auto;max-height:80px;padding:4px;flex-direction:row;gap:0;overflow-x:auto;overflow-y:hidden}
   body[data-mode="counter"] nav .nav-brand,body[data-mode="counter"] nav .nav-footer{display:none}
-  body[data-mode="counter"] nav button{flex:0 0 116px;width:116px;min-height:60px;text-align:center;padding:8px 4px;font-size:11px}
+  body[data-mode="counter"] nav .nav-heading{display:none}
+  body[data-mode="counter"] nav button{flex:1 1 0;width:auto;min-width:0;min-height:60px;text-align:center;padding:8px 5px;font-size:12px;line-height:1.35}
+  body[data-mode="counter"] nav button span,body[data-mode="counter"] nav button small{overflow-wrap:normal;word-break:normal}
   body[data-mode="counter"] .counter-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,.72fr);gap:12px}
   body[data-mode="counter"] .card-sticky{position:sticky;top:12px;max-height:calc(100vh - 105px);overflow-y:auto}
   body[data-mode="counter"] .pos-orderbar{grid-template-columns:repeat(2,minmax(0,1fr))}
   body[data-mode="counter"] .admin-grid{grid-template-columns:1fr}
   body[data-mode="counter"] .admin-grid form{max-height:none;overflow:visible}
 }
-@media(max-width:860px){
+@media(max-width:650px){
   body[data-mode="counter"] header{margin-left:0;padding:14px 15px 3px}
   body[data-mode="counter"] header strong{font-size:20px}
   body[data-mode="counter"] #app{margin-left:0;padding:12px 14px 110px}
@@ -212,7 +227,7 @@ body[data-mode="counter"] .week-stats strong{display:block;font-size:20px}
   body[data-mode="counter"] nav .nav-brand,
   body[data-mode="counter"] nav .nav-footer{display:none}
   body[data-mode="counter"] nav button{
-    flex:0 0 116px;width:116px;min-height:60px;text-align:center;
+    flex:1 1 0;width:auto;min-width:0;min-height:60px;text-align:center;
     padding:8px 4px;font-size:11px;
   }
   body[data-mode="counter"] nav button small{font-size:10px}

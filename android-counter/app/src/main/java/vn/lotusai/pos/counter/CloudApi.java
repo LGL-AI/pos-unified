@@ -26,15 +26,20 @@ final class CloudApi {
             "ok".equals(h.optString("display"))&&h.optBoolean("echoReady")&&h.optBoolean("autoPrintReady")&&h.optBoolean("qrTableReady");
     }
     JSONObject call(String method,String path,String token,JSONObject body) throws Exception {
-        if(!path.matches("/api/staff/(?:orders/[a-fA-F0-9-]{36}|jobs/kitchen:[a-fA-F0-9-]{36}:[0-9]+/(?:claim|status)|display(?:/[a-fA-F0-9-]{36})?)")) throw new SecurityException("API path denied");
+        String uuid="[a-fA-F0-9]{8}(?:-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}";
+        if(!path.matches("/api/staff/(?:me|orders/"+uuid+"|jobs/kitchen:"+uuid+":[0-9]+/(?:claim|status)|display(?:/"+uuid+")?)")) throw new SecurityException("API path denied: "+path);
         HttpURLConnection c=(HttpURLConnection)new URL(origin+path).openConnection();
-        c.setRequestMethod(method);c.setConnectTimeout(7000);c.setReadTimeout(10000);
-        c.setRequestProperty("Authorization","Bearer "+token);c.setRequestProperty("Accept","application/json");c.setRequestProperty("Cache-Control","no-store");
-        if(body!=null){c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json");try(OutputStream out=c.getOutputStream()){out.write(body.toString().getBytes(StandardCharsets.UTF_8));}}
-        int status=c.getResponseCode();InputStream stream=status<400?c.getInputStream():c.getErrorStream();byte[] bytes=stream==null?new byte[0]:read(stream);c.disconnect();
-        JSONObject json=new JSONObject(new String(bytes,StandardCharsets.UTF_8));
-        if(status<200||status>=300||!json.optBoolean("ok"))throw new Exception("Worker "+status+": "+json.optString("message",json.optString("code")));
-        return json;
+        try {
+            c.setRequestMethod(method);c.setConnectTimeout(7000);c.setReadTimeout(10000);
+            c.setRequestProperty("Authorization","Bearer "+token);c.setRequestProperty("Accept","application/json");c.setRequestProperty("Cache-Control","no-store");
+            if(body!=null){c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json");try(OutputStream out=c.getOutputStream()){out.write(body.toString().getBytes(StandardCharsets.UTF_8));}}
+            int status=c.getResponseCode();InputStream stream=status<400?c.getInputStream():c.getErrorStream();byte[] bytes=stream==null?new byte[0]:read(stream);
+            JSONObject json;
+            try {json=new JSONObject(new String(bytes,StandardCharsets.UTF_8));}
+            catch(org.json.JSONException e){throw new Exception("Worker HTTP "+status+" tại "+path.replaceAll(uuid,"/:id")+" trả dữ liệu không phải JSON",e);}
+            if(status<200||status>=300||!json.optBoolean("ok"))throw new Exception("Worker "+status+": "+json.optString("message",json.optString("code")));
+            return json;
+        } finally {c.disconnect();}
     }
     private static byte[] read(InputStream in) throws Exception {try(InputStream src=in;java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream()){byte[] buf=new byte[8192];int n;while((n=src.read(buf))!=-1)out.write(buf,0,n);return out.toByteArray();}}
 }

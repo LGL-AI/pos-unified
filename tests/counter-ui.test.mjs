@@ -20,10 +20,12 @@ test('desktop counter buttons pair the second screen and publish priced cart thr
  const click=async dataset=>listeners.click({target:{closest:()=>({dataset,disabled:false})}});
  await new Promise(r=>setTimeout(r,10));assert.match(app.innerHTML,/Đăng nhập Lotus POS Cloud/);
  await listeners.submit({target:{id:'login',password:{value:env.POS_STAFF_PASSWORD}},preventDefault(){}});
- assert.match(app.innerHTML,/Màn hình thứ hai/);
+ const salesNav=app.innerHTML.match(/<nav aria-label="Điều hướng POS">[\s\S]*?<\/nav>/)?.[0]||'';
+ assert.deepEqual([...salesNav.matchAll(/data-screen="([^"]+)"/g)].map(x=>x[1]),['new','orders','storetools']);
  assert.match(app.innerHTML,/Giỏ món/);
  assert.match(app.innerHTML,/data-category="Canh"/);
  assert.match(app.innerHTML,/class="nav-brand"/);
+ await click({screen:'storetools'});assert.match(app.innerHTML,/data-screen="display"/);assert.match(app.innerHTML,/Màn hình thứ hai/);
  assert.match(readFileSync(new URL('../public/counter/index.html',import.meta.url),'utf8'),/poc-counter\.css/);
  await click({category:'Canh'});assert.match(menuList.innerHTML,/data-add="113"/);assert.doesNotMatch(menuList.innerHTML,/data-add="101"/);
  await click({category:'Tất cả'});listeners.input({target:{id:'product-search',value:'PT007'}});assert.match(menuList.innerHTML,/data-add="107"/);assert.doesNotMatch(menuList.innerHTML,/data-add="101"/);
@@ -35,11 +37,16 @@ test('desktop counter buttons pair the second screen and publish priced cart thr
  await click({screen:'qrorders'});assert.match(app.innerHTML,/QR Order · 扫码订单/);assert.match(app.innerHTML,/Chưa có đơn hàng trên D1 trong mục này/);
  await click({screen:'display'});assert.match(app.innerHTML,/Ghép màn hình/);
  await click({action:'display-pair'});assert.match(app.innerHTML,/Sao chép liên kết/);
+ const pairToken=app.innerHTML.match(/#token=([A-Za-z0-9_-]{40,100})/)?.[1];assert.ok(pairToken);
  const pairing=db.prepare('SELECT id,token_hash FROM pos_display_sessions').get();assert.ok(pairing?.id);assert.ok(pairing.token_hash);
  await click({screen:'new'});await click({add:'101'});await click({itemSave:''});
  await new Promise(r=>setTimeout(r,560));
  const snapshot=JSON.parse(db.prepare('SELECT snapshot_json FROM pos_display_sessions WHERE id=?').get(pairing.id).snapshot_json);
  assert.equal(snapshot.table,'T01');assert.equal(snapshot.total,130000);assert.equal(snapshot.items[0].qty,1);
+ const displayScreen={innerHTML:''},displayState={textContent:'',classList:{add(){},remove(){}}};let displayTick;
+ const customer={document:{querySelector:s=>s==='#screen'?displayScreen:displayState},location:{hash:'#token='+pairToken,search:'?id='+pairing.id,pathname:'/display/'},history:{replaceState(){}},sessionStorage:{getItem:k=>session.get(k)||null,setItem:(k,v)=>session.set(k,v)},URLSearchParams,Date,Intl,JSON,Number,String,AbortController,setTimeout,clearTimeout,setInterval:fn=>{displayTick=fn},fetch:async(path,options={})=>worker.fetch(new Request('https://pos.test'+path,{headers:options.headers}),env)};
+ customer.window=customer;vm.createContext(customer);vm.runInContext(readFileSync(new URL('../public/display/display.js',import.meta.url),'utf8'),customer);
+ await new Promise(r=>setTimeout(r,30));assert.ok(displayScreen.innerHTML.includes(snapshot.items[0].name));assert.match(displayScreen.innerHTML,/130.000/);assert.match(displayState.textContent,/Đã đồng bộ/);
  assert.doesNotMatch(app.innerHTML,/data-screen="license"/);
  await click({screen:'license'});assert.doesNotMatch(app.innerHTML,/CHỈ MÔ PHỎNG|license-form/);
  await click({action:'license-grace'});assert.doesNotMatch(app.innerHTML,/GRACE|SUSPENDED/);
@@ -48,6 +55,7 @@ test('desktop counter buttons pair the second screen and publish priced cart thr
  const order=db.prepare('SELECT id,total FROM qr_orders ORDER BY created_at DESC LIMIT 1').get();assert.ok(order);
  await click({pay:order.id,method:'CASH'});assert.deepEqual(devices.map(x=>x.type),['DRAWER','LABEL','KITCHEN','RECEIPT']);assert.equal(printed,0);assert.equal(db.prepare('SELECT payment_status FROM qr_orders WHERE id=?').get(order.id).payment_status,'PAID');
  await new Promise(r=>setTimeout(r,560));const afterPay=JSON.parse(db.prepare('SELECT snapshot_json FROM pos_display_sessions WHERE id=?').get(pairing.id).snapshot_json);assert.equal(afterPay.paymentStatus,'PAID');assert.equal(afterPay.bankPayment,null);
+ await displayTick();assert.match(displayScreen.innerHTML,/已付款/);assert.doesNotMatch(displayScreen.innerHTML,/Quét mã để chuyển/);
  const job=db.prepare('SELECT id FROM pos_kitchen_jobs WHERE order_id=? LIMIT 1').get(order.id);assert.ok(job);
  assert.equal(devices[2].jobId,job.id);assert.equal(devices[1].jobId,job.id);assert.equal(db.prepare('SELECT status FROM pos_kitchen_jobs WHERE id=?').get(job.id).status,'SENT');
  await click({printJob:job.id});assert.equal(printed,1,app.innerHTML.slice(0,1200));assert.match(printNode.innerHTML,/PHIẾU BẾP/);assert.equal(db.prepare('SELECT status FROM pos_kitchen_jobs WHERE id=?').get(job.id).status,'SENT');

@@ -1,4 +1,4 @@
-> Bản thử RC5.1/P0.6: xem [RELEASE_RC5_1_QR_ANDROID.md](RELEASE_RC5_1_QR_ANDROID.md). APK versionCode 8 chờ Worker RC5.1 và D1 0014–0015; QR bàn ghi lượt mở trên D1 và khóa đúng bàn quét.
+> Bản thử POS quầy Android 11 RC5.1/P0.12: xem [kiểm tra API và sửa lỗi phiên](COUNTER_P012_API_AUDIT_VI.md), [sáu cấu hình dọc/ngang](COUNTER_P011_LAYOUT_VI.md) và [cách bật màn hình khách thứ hai](COUNTER_P010_DISPLAY_VI.md). APK versionCode 14; Worker RC5.1 và D1 0014–0015 cần đã được triển khai. POS cầm tay Sunmi V2s là ứng dụng riêng.
 
 # Lotus POS Unified · Echo Coffee 2.6.0-rc.5.1 (gói Cloudflare)
 

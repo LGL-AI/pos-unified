@@ -11,11 +11,11 @@ ASSETS="$BUILD/assets"
 rm -rf "$ASSETS"
 mkdir -p "$ASSETS"
 cp "$PROJECT_DIR/app/src/main/assets/hook.js" "$ASSETS/hook.js"
-for path in counter/index.html counter/counter.css counter/poc-counter.css counter/shift-ui.css counter/analytics.css counter/devices.js counter/shift-ui.js counter/analytics.js staff/staff.css staff/staff.js staff/qrcode.js staff/scanner.js staff/barcode.js display/index.html display/display.css display/display.js assets/qrcode.js brands/echo-coffee.jpg; do
+for path in counter/index.html counter/counter.css counter/poc-counter.css counter/shift-ui.css counter/analytics.css counter/layout-profiles.css counter/devices.js counter/shift-ui.js counter/analytics.js staff/staff.css staff/staff.js staff/qrcode.js staff/scanner.js staff/barcode.js display/index.html display/display.css display/display.js assets/qrcode.js brands/echo-coffee.jpg; do
   mkdir -p "$ASSETS/ui/$(dirname "$path")"
   cp "$PROJECT_DIR/../public/$path" "$ASSETS/ui/$path"
 done
-"$TOOLS/aapt2" link -o "$BUILD/base.apk" -I "$ANDROID_JAR" --manifest "$PROJECT_DIR/app/src/main/AndroidManifest.xml" --min-sdk-version 23 --target-sdk-version 30 --version-code 10 --version-name 2.6.0-rc.5.1-counter-p0.8 -A "$ASSETS" --java "$BUILD/generated"
+"$TOOLS/aapt2" link -o "$BUILD/base.apk" -I "$ANDROID_JAR" --manifest "$PROJECT_DIR/app/src/main/AndroidManifest.xml" --min-sdk-version 23 --target-sdk-version 30 --version-code 14 --version-name 2.6.0-rc.5.1-counter-p0.12 -A "$ASSETS" --java "$BUILD/generated"
 find "$PROJECT_DIR/app/src/main/java" "$BUILD/generated" -name '*.java' -print0 | xargs -0 "$JAVAC_BIN" -encoding UTF-8 -source 8 -target 8 -classpath "$ANDROID_JAR" -d "$BUILD/classes"
 if unzip -tq "$TOOLS/lib/d8.jar" >/dev/null 2>&1; then
   D8=("$TOOLS/d8")
