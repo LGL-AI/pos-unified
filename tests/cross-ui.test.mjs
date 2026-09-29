@@ -125,7 +125,7 @@ test('counter stock reaches an open QR and handheld; QR order, POS changes and r
  assert.equal(points,Math.floor((500000-bills[0].total)/10000));
  await counter.click({screen:'new'});await counter.click({action:'lookup'});
  assert.match(counter.app.innerHTML,/Khách đồng bộ/);
- await counter.click({add:'101'});await counter.click({action:'submit'});
+ await counter.click({add:'101'});await counter.click({itemSave:''});await counter.click({action:'submit'});
  await counter.click({screen:'new'});
  assert.doesNotMatch(counter.app.innerHTML,/Khách đồng bộ/, 'The next customer must not inherit the previous member');
  db.close();

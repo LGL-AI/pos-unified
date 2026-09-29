@@ -36,7 +36,7 @@ test('desktop counter buttons pair the second screen and publish priced cart thr
  await click({screen:'display'});assert.match(app.innerHTML,/Ghép màn hình/);
  await click({action:'display-pair'});assert.match(app.innerHTML,/Sao chép liên kết/);
  const pairing=db.prepare('SELECT id,token_hash FROM pos_display_sessions').get();assert.ok(pairing?.id);assert.ok(pairing.token_hash);
- await click({screen:'new'});await click({add:'101'});
+ await click({screen:'new'});await click({add:'101'});await click({itemSave:''});
  await new Promise(r=>setTimeout(r,560));
  const snapshot=JSON.parse(db.prepare('SELECT snapshot_json FROM pos_display_sessions WHERE id=?').get(pairing.id).snapshot_json);
  assert.equal(snapshot.table,'T01');assert.equal(snapshot.total,130000);assert.equal(snapshot.items[0].qty,1);
@@ -46,13 +46,13 @@ test('desktop counter buttons pair the second screen and publish priced cart thr
  await click({screen:'dashboard'});assert.match(app.innerHTML,/Báo cáo ngày/);
  await click({screen:'new'});await click({action:'submit'});
  const order=db.prepare('SELECT id,total FROM qr_orders ORDER BY created_at DESC LIMIT 1').get();assert.ok(order);
- await click({pay:order.id,method:'CASH'});assert.deepEqual(devices.map(x=>x.type),['DRAWER','RECEIPT','KITCHEN','LABEL']);assert.equal(printed,0);assert.equal(db.prepare('SELECT payment_status FROM qr_orders WHERE id=?').get(order.id).payment_status,'PAID');
+ await click({pay:order.id,method:'CASH'});assert.deepEqual(devices.map(x=>x.type),['DRAWER','LABEL','KITCHEN','RECEIPT']);assert.equal(printed,0);assert.equal(db.prepare('SELECT payment_status FROM qr_orders WHERE id=?').get(order.id).payment_status,'PAID');
  await new Promise(r=>setTimeout(r,560));const afterPay=JSON.parse(db.prepare('SELECT snapshot_json FROM pos_display_sessions WHERE id=?').get(pairing.id).snapshot_json);assert.equal(afterPay.paymentStatus,'PAID');assert.equal(afterPay.bankPayment,null);
  const job=db.prepare('SELECT id FROM pos_kitchen_jobs WHERE order_id=? LIMIT 1').get(order.id);assert.ok(job);
- assert.equal(devices[2].jobId,job.id);assert.equal(devices[3].jobId,job.id);assert.equal(db.prepare('SELECT status FROM pos_kitchen_jobs WHERE id=?').get(job.id).status,'SENT');
+ assert.equal(devices[2].jobId,job.id);assert.equal(devices[1].jobId,job.id);assert.equal(db.prepare('SELECT status FROM pos_kitchen_jobs WHERE id=?').get(job.id).status,'SENT');
  await click({printJob:job.id});assert.equal(printed,1,app.innerHTML.slice(0,1200));assert.match(printNode.innerHTML,/PHIẾU BẾP/);assert.equal(db.prepare('SELECT status FROM pos_kitchen_jobs WHERE id=?').get(job.id).status,'SENT');
- await click({screen:'new'});await click({add:'101'});await click({action:'submit'});const bank=db.prepare('SELECT id FROM qr_orders ORDER BY created_at DESC LIMIT 1').get();assert.ok(bank.id!==order.id);
- await click({pay:bank.id,method:'BANK'});assert.equal(db.prepare('SELECT payment_method FROM qr_orders WHERE id=?').get(bank.id).payment_method,'BANK');assert.deepEqual(devices.map(x=>x.type),['DRAWER','RECEIPT','KITCHEN','LABEL','RECEIPT','KITCHEN','LABEL']);
+ await click({screen:'new'});await click({add:'101'});await click({itemSave:''});await click({action:'submit'});const bank=db.prepare('SELECT id FROM qr_orders ORDER BY created_at DESC LIMIT 1').get();assert.ok(bank.id!==order.id);
+ await click({pay:bank.id,method:'BANK'});assert.equal(db.prepare('SELECT payment_method FROM qr_orders WHERE id=?').get(bank.id).payment_method,'BANK');assert.deepEqual(devices.map(x=>x.type),['DRAWER','LABEL','KITCHEN','RECEIPT','LABEL','KITCHEN','RECEIPT']);
  db.prepare('INSERT INTO pos_refunds(id,idem_key,fingerprint,order_id,amount,reason,method,actor_id,created_at) VALUES(?,?,?,?,?,?,?,?,?)').run('csv-test-refund','csv-refund-idempotency','csv-refund',order.id,1000,'Thối tiền','CASH','test',reportDay+'T02:00:00.000Z');
  await click({screen:'dashboard'});await click({action:'report-load'});await click({action:'report-download'});
  assert.ok(exported);assert.match(await exported.text(),/,-1000,/);

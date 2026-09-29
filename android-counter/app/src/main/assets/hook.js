@@ -16,7 +16,8 @@
             const paid=billId?body.bills?.some(b=>b.id===billId&&b.paymentStatus==='PAID'):body.order.paymentStatus==='PAID';
             if(paid) window.LotusNative.paymentRecorded(body.order.id,billId,token());
           }
-          if(body.order?.id && (method==='GET'||method==='POST'))window.LotusNative.displayOrder(body.order.id,token());
+          // The foreground UI owns the customer display. Background detail reads
+          // (printing/recovery/old requests) must never switch the visible order.
         }
       }
     }catch(e){console.warn('Lotus native observer:',e)}

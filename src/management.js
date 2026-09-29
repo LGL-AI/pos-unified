@@ -79,7 +79,7 @@ export async function handleManagement(req,env,actor,deps){
    check((staffId==='OWNER'||uuid(staffId))&&day(workDate)&&clock(start)&&clock(end)&&start<end,'INVALID_SCHEDULE');
    if(staffId!=='OWNER'){const staff=await env.DB.prepare('SELECT id FROM pos_staff_users WHERE id=? AND active=1').bind(staffId).first();check(staff,'INVALID_SCHEDULE')}
    const overlap=await env.DB.prepare('SELECT id FROM pos_shift_schedules WHERE staff_id=? AND work_date=? AND start_time<? AND end_time>?').bind(staffId,workDate,end,start).first();if(overlap)return bad(409,'SHIFT_OVERLAP','Nhân viên đã có ca trùng giờ');
-   const id=crypto.randomUUID();await env.DB.prepare('INSERT INTO pos_shift_schedules(id,staff_id,work_date,start_time,end_time,note,created_by,created_at) VALUES(?,?,?,?,?,?,?,?)').bind(id,staffId,workDate,start,end,note,actor.id,new Date().toISOString()).run();return ok({id},201);
+   const id=crypto.randomUUID();const saved=await env.DB.prepare("INSERT INTO pos_shift_schedules(id,staff_id,work_date,start_time,end_time,note,created_by,created_at) SELECT ?,?,?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM pos_ot_requests WHERE staff_id=? AND work_date=? AND status='APPROVED' AND start_time<? AND end_time>?)").bind(id,staffId,workDate,start,end,note,actor.id,new Date().toISOString(),staffId,workDate,end,start).run();return saved.meta.changes?ok({id},201):bad(409,'SHIFT_OVERLAP','Ca làm trùng tăng ca đã duyệt');
   }
   const schedule=path.match(/^\/api\/staff\/schedules\/([a-f0-9-]{36})(?:\/remove)?$/i);
   if(schedule&&(method==='DELETE'||method==='POST'&&path.endsWith('/remove'))){

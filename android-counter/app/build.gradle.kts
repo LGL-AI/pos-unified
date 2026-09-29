@@ -2,7 +2,7 @@ plugins { id("com.android.application") }
 android {
     namespace = "vn.lotusai.pos.counter"
     compileSdk = 35
-    defaultConfig { applicationId = "vn.lotusai.pos.counter"; minSdk = 23; targetSdk = 30; versionCode = 8; versionName = "2.6.0-rc.5.1-counter-p0.6" }
+    defaultConfig { applicationId = "vn.lotusai.pos.counter"; minSdk = 23; targetSdk = 30; versionCode = 10; versionName = "2.6.0-rc.5.1-counter-p0.8" }
     buildTypes { release { isMinifyEnabled = false } }
     sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/posUiAssets"))
 }

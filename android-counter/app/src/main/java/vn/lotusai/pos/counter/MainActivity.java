@@ -17,6 +17,7 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.WebChromeClient;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -45,6 +46,9 @@ public class MainActivity extends Activity implements DisplayManager.DisplayList
         w.setWebViewClient(new WebViewClient(){@Override public WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest request){if(!trusted(request.getUrl().toString()))return null;String path=request.getUrl().getPath();if("/counter/".equals(path))path="/counter/index.html";if("/display/".equals(path))path="/display/index.html";if(!UI_PATHS.contains(path)||main&&path.startsWith("/display/")||!main&&path.startsWith("/counter/"))return null;String mime=path.endsWith(".html")?"text/html":path.endsWith(".css")?"text/css":path.endsWith(".jpg")?"image/jpeg":"application/javascript";try{return new WebResourceResponse(mime,path.endsWith(".jpg")?null:"UTF-8",getAssets().open("ui"+path));}catch(Exception e){showStatus("Thiếu giao diện trong APK: "+path);return null;}}
             @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){if(request.isForMainFrame()&&!trusted(request.getUrl().toString())){startActivity(new Intent(Intent.ACTION_VIEW,request.getUrl()));return true;}return false;}
             @Override public void onPageFinished(WebView view,String url){if(main&&trusted(url)){try(InputStream in=getAssets().open("hook.js");ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1)out.write(b,0,n);view.evaluateJavascript(new String(out.toByteArray(),StandardCharsets.UTF_8),null);}catch(Exception e){showStatus("Bridge: "+e.getMessage());}}}});
+        // WebView suppresses prompt/confirm/alert without a WebChromeClient.
+        // Use Android's default dialogs; cancel/back always resolves the JS dialog.
+        w.setWebChromeClient(new WebChromeClient());
         if(main)w.addJavascriptInterface(new Bridge(),"LotusNative");}
     private boolean trusted(String url){return url!=null&&(url.equals(config.origin())||url.startsWith(config.origin()+"/"));}
     private void showStatus(String text){ui.post(()->{if(status!=null)status.setText(text);});}
@@ -59,6 +63,7 @@ public class MainActivity extends Activity implements DisplayManager.DisplayList
         @JavascriptInterface public void displaySession(String token){ui.post(()->{if(trusted(web.getUrl()))session(token);});}
         @JavascriptInterface public void displayDraft(String draft,String token){ui.post(()->{if(trusted(web.getUrl())&&validToken(token)&&draft!=null&&draft.length()<20000){visibleOrder=null;latestDraft=draft;session(token);syncDraft(token);}});}
         @JavascriptInterface public void openSettings(){ui.post(()->{if(trusted(web.getUrl()))openHardwareSettings();});}
+        @JavascriptInterface public void reconnectDisplay(){ui.post(()->{if(!trusted(web.getUrl()))return;if(customer!=null){customer.dismiss();customer=null;}refreshDisplay();});}
         @JavascriptInterface public String getDisplays(){org.json.JSONArray list=new org.json.JSONArray();for(Display d:displays.getDisplays()){try{org.json.JSONObject j=new org.json.JSONObject();j.put("id",d.getDisplayId());j.put("name",d.getName());j.put("width",d.getMode().getPhysicalWidth());j.put("height",d.getMode().getPhysicalHeight());j.put("flags",d.getFlags());list.put(j);}catch(Exception ignored){}}return list.toString();}
         @JavascriptInterface public String printQueue(){return engine.queue().toString();}
     }
@@ -72,5 +77,5 @@ public class MainActivity extends Activity implements DisplayManager.DisplayList
     }
     @Override public void onDisplayAdded(int id){refreshDisplay();}@Override public void onDisplayRemoved(int id){refreshDisplay();}@Override public void onDisplayChanged(int id){refreshDisplay();}
     @Override protected void onResume(){super.onResume();String origin=config.origin();if(loadedOrigin!=null&&!loadedOrigin.equals(origin)){loadedOrigin=origin;pairingEpoch++;pairing=false;engine.shutdown();engine=new PrintEngine(this,this::showStatus);cloud=new CloudApi(config);sessionToken=null;pairId=null;pairToken=null;pairExpiresAt=0;visibleOrder=null;latestDraft=null;lastSentDraft=null;revision=0;lastPairRetryAt=0;webReady=false;web.clearHistory();web.loadUrl("about:blank");if(customer!=null){customer.dismiss();customer=null;}}if(sessionToken!=null)engine.resume(sessionToken);refreshDisplay();verifyHealth();}@Override protected void onDestroy(){displays.unregisterDisplayListener(this);if(customer!=null)customer.dismiss();engine.shutdown();web.destroy();tasks.shutdownNow();super.onDestroy();}
-    @Override public void onBackPressed(){if(web.canGoBack())web.goBack();else super.onBackPressed();}
+    @Override public void onBackPressed(){if(!webReady){super.onBackPressed();return;}web.evaluateJavascript("Boolean(window.LotusCounterBack && window.LotusCounterBack())",handled->{if(!"true".equals(handled)){if(web.canGoBack())web.goBack();else MainActivity.super.onBackPressed();}});}
 }

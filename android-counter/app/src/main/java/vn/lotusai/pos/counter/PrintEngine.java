@@ -30,11 +30,18 @@ final class PrintEngine {
         executor.execute(()->{try{
             JSONObject detail=api.call("GET","/api/staff/orders/"+orderId,token,null),order=detail.getJSONObject("order");
             if(!"PAID".equals(order.optString("paymentStatus")))return;
+            requirePermissions(token,false,true);
             JSONArray jobsArray=detail.optJSONArray("jobs");
             if(jobsArray!=null)for(int n=0;n<jobsArray.length();n++){JSONObject job=jobsArray.getJSONObject(n);if(jobId.equals(job.optString("id"))){enqueueLabels(job,order);enqueueKitchen(job,order,token);break;}}
         }catch(Exception e){listener.onStatus("Đồng bộ tem/bếp: "+e.getMessage());}});
     }
     private static boolean validOrder(String id){return id!=null&&id.matches("[a-fA-F0-9]{8}(?:-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}");}
+    private void requirePermissions(String token,boolean receipt,boolean kitchen)throws Exception{
+        JSONObject staff=api.call("GET","/api/staff/me",token,null).getJSONObject("staff");
+        JSONArray permissions=staff.optJSONArray("permissions");boolean canReceipt=false,canKitchen=false;
+        if(permissions!=null)for(int i=0;i<permissions.length();i++){String p=permissions.optString(i);if("PAYMENT_CONFIRM".equals(p))canReceipt=true;if("PRINT_KITCHEN".equals(p))canKitchen=true;}
+        if(receipt&&!canReceipt||kitchen&&!canKitchen)throw new Exception("Tài khoản hiện tại không có quyền in loại phiếu này");
+    }
     private synchronized void remember(String id){try{JSONArray pending=new JSONArray(recovery.getString("pending","[]"));for(int i=0;i<pending.length();i++)if(id.equals(pending.optString(i)))return;pending.put(id);recovery.edit().putString("pending",pending.toString()).commit();}catch(Exception ignored){}}
     private synchronized void forget(String id){try{JSONArray old=new JSONArray(recovery.getString("pending","[]")),next=new JSONArray();for(int i=0;i<old.length();i++)if(!id.equals(old.optString(i)))next.put(old.optString(i));recovery.edit().putString("pending",next.toString()).commit();}catch(Exception ignored){}}
     private void verifyAndPrint(String orderId,String billId,String token,String recoveryKey){
@@ -49,6 +56,7 @@ final class PrintEngine {
             final JSONObject selected=found;
             final boolean wholePaid="PAID".equals(order.optString("paymentStatus"));
             final JSONArray kitchen=wholePaid?detail.optJSONArray("jobs"):null;
+            requirePermissions(token,true,kitchen!=null&&kitchen.length()>0);
             boolean complete=PrintFlow.afterPayment(
                 ()->{if(kitchen!=null)for(int n=0;n<kitchen.length();n++)enqueueLabels(kitchen.getJSONObject(n),order);},
                 ()->{boolean sent=true;if(kitchen!=null)for(int n=0;n<kitchen.length();n++)if(!enqueueKitchen(kitchen.getJSONObject(n),order,token))sent=false;return sent;},
@@ -73,7 +81,7 @@ final class PrintEngine {
         JSONArray items=job.getJSONArray("items");for(int i=0;i<items.length();i++){
             JSONObject item=items.getJSONObject(i);if(item.optBoolean("noLabel",false))continue;
             int qty=Math.min(60,item.optInt("qty",1));for(int unit=0;unit<qty;unit++){
-                JSONObject label=new JSONObject();label.put("code",code);label.put("table",table);label.put("name",item.optString("name"));label.put("note",item.optJSONObject("mods")!=null?item.getJSONObject("mods").optString("note"):"");
+                JSONObject label=new JSONObject();label.put("code",code);label.put("table",table);label.put("name",item.optString("name"));label.put("nameCn",item.optString("nameCn"));label.put("note",PrintText.modifiers(item.optJSONObject("mods")));
                 enqueue(remoteId+":LABEL:"+i+":"+unit,"LABEL",label);
             }
         }

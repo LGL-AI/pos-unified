@@ -15,7 +15,7 @@ for path in counter/index.html counter/counter.css counter/poc-counter.css count
   mkdir -p "$ASSETS/ui/$(dirname "$path")"
   cp "$PROJECT_DIR/../public/$path" "$ASSETS/ui/$path"
 done
-"$TOOLS/aapt2" link -o "$BUILD/base.apk" -I "$ANDROID_JAR" --manifest "$PROJECT_DIR/app/src/main/AndroidManifest.xml" --min-sdk-version 23 --target-sdk-version 30 --version-code 8 --version-name 2.6.0-rc.5.1-counter-p0.6 -A "$ASSETS" --java "$BUILD/generated"
+"$TOOLS/aapt2" link -o "$BUILD/base.apk" -I "$ANDROID_JAR" --manifest "$PROJECT_DIR/app/src/main/AndroidManifest.xml" --min-sdk-version 23 --target-sdk-version 30 --version-code 10 --version-name 2.6.0-rc.5.1-counter-p0.8 -A "$ASSETS" --java "$BUILD/generated"
 find "$PROJECT_DIR/app/src/main/java" "$BUILD/generated" -name '*.java' -print0 | xargs -0 "$JAVAC_BIN" -encoding UTF-8 -source 8 -target 8 -classpath "$ANDROID_JAR" -d "$BUILD/classes"
 if unzip -tq "$TOOLS/lib/d8.jar" >/dev/null 2>&1; then
   D8=("$TOOLS/d8")

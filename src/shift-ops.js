@@ -135,6 +135,22 @@ export async function handleShiftOps(req,env,actor,deps){
    const stamp=status==='ACCEPTED'?'accepted_at':'reviewed_at';
    const fields=kind==='swap'&&status==='ACCEPTED'?`status=?,${stamp}=?,version=version+1`:'status=?,reviewer_id=?,reviewed_at=?,review_note=?,version=version+1';
    const values=kind==='swap'&&status==='ACCEPTED'?[status,iso()]:[status,actor.id,iso(),note];
+   if(kind==='ot'&&status==='APPROVED'){
+    // Check conflicts in the same write: concurrent approvals cannot both pass.
+    const done=await env.DB.prepare(`UPDATE pos_ot_requests SET ${fields} WHERE id=? AND version=? AND status='PENDING'
+     AND NOT EXISTS(SELECT 1 FROM pos_shift_schedules s WHERE s.staff_id=pos_ot_requests.staff_id AND s.work_date=pos_ot_requests.work_date AND s.start_time<pos_ot_requests.end_time AND s.end_time>pos_ot_requests.start_time)
+     AND NOT EXISTS(SELECT 1 FROM pos_ot_requests other WHERE other.id!=pos_ot_requests.id AND other.staff_id=pos_ot_requests.staff_id AND other.work_date=pos_ot_requests.work_date AND other.status='APPROVED' AND other.start_time<pos_ot_requests.end_time AND other.end_time>pos_ot_requests.start_time)
+     AND NOT EXISTS(SELECT 1 FROM pos_leave_requests l WHERE l.staff_id=pos_ot_requests.staff_id AND l.status='APPROVED' AND pos_ot_requests.work_date BETWEEN l.from_date AND l.to_date)`)
+     .bind(...values,ref,b.version).run();
+    return done.meta.changes?ok({id:ref}):bad(409,'OT_CONFLICT','Tăng ca trùng lịch làm, tăng ca đã duyệt, ngày nghỉ hoặc yêu cầu vừa thay đổi');
+   }
+   if(status==='APPROVED'&&(kind==='leave'||kind==='swap')){
+    const guard=kind==='leave'
+     ? "NOT EXISTS(SELECT 1 FROM pos_ot_requests ot WHERE ot.staff_id=pos_leave_requests.staff_id AND ot.status='APPROVED' AND ot.work_date BETWEEN pos_leave_requests.from_date AND pos_leave_requests.to_date)"
+     : "NOT EXISTS(SELECT 1 FROM pos_shift_schedules s JOIN pos_ot_requests ot ON ot.staff_id=pos_swap_requests.to_staff_id AND ot.work_date=s.work_date AND ot.status='APPROVED' AND ot.start_time<s.end_time AND ot.end_time>s.start_time WHERE s.id=pos_swap_requests.schedule_id)";
+    const done=await env.DB.prepare(`UPDATE ${table} SET ${fields} WHERE id=? AND version=? AND status=? AND ${guard}`).bind(...values,ref,b.version,prior).run();
+    return done.meta.changes?ok({id:ref}):bad(409,'SHIFT_CONFLICT','Yêu cầu đã thay đổi hoặc trùng tăng ca đã duyệt');
+   }
    const changed=await env.DB.prepare(`UPDATE ${table} SET ${fields} WHERE id=? AND version=? AND status=?`).bind(...values,ref,b.version,prior).run();
    return changed.meta.changes?ok({id:ref}):bad(409,'CHANGED','Yêu cầu đã đổi trạng thái hoặc lịch không còn hợp lệ');
   }

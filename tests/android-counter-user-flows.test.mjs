@@ -10,8 +10,9 @@ test('Android 11 cashier creates a product and customer, opens hardware settings
  const db=new DatabaseSync(':memory:');applyCurrentSchema(db,{legacyMenu:true});
  const DB={prepare(sql){let args=[];return {bind(...values){args=values;return this},async first(){return db.prepare(sql).get(...args)||null},async all(){return {results:db.prepare(sql).all(...args)}},async run(){return {meta:{changes:db.prepare(sql).run(...args).changes}}},_run(){return db.prepare(sql).run(...args)}}},async batch(queries){db.exec('BEGIN');try{const result=queries.map(query=>query._run());db.exec('COMMIT');return result}catch(error){db.exec('ROLLBACK');throw error}}};
  const env={DB,ORDERING_ENABLED:'true',SESSION_SECRET:'android-counter-test-secret-1234567890123456',POS_STAFF_PASSWORD:'counter-test-password'};
- const app={innerHTML:'',querySelector:()=>null},connection={textContent:'',classList:{toggle(){}}},listeners={},intervals=new Map(),local=new Map(),session=new Map(),calls={settings:0,drafts:[],paidJobs:[],paidRecords:[]};
- const document={body:{dataset:{mode:'counter'}},hidden:false,querySelector:selector=>selector==='#app'?app:selector==='#connection'?connection:null,querySelectorAll:()=>[],addEventListener:(type,handler)=>listeners[type]=handler};
+ const nav={scrollTop:0,scrollLeft:0},scanner={scrolled:false,focused:false,scrollIntoView(){this.scrolled=true},focus(){this.focused=true}};
+ let html='';const app={get innerHTML(){return html},set innerHTML(value){html=value;nav.scrollTop=0;nav.scrollLeft=0},querySelector:s=>s==='nav'?nav:null},connection={textContent:'',classList:{toggle(){}}},listeners={},intervals=new Map(),local=new Map(),session=new Map(),calls={settings:0,drafts:[],paidJobs:[],paidRecords:[]};
+ const document={body:{dataset:{mode:'counter'}},hidden:false,querySelector:selector=>selector==='#app'?app:selector==='#connection'?connection:selector==='#scan-input'?scanner:null,querySelectorAll:()=>[],addEventListener:(type,handler)=>listeners[type]=handler};
  class FakeFormData{constructor(form){this.values=form.values||{}}*entries(){yield* Object.entries(this.values)}}
  const context={document,localStorage:{getItem:key=>local.get(key)||null,setItem:(key,value)=>local.set(key,value),removeItem:key=>local.delete(key)},sessionStorage:{getItem:key=>session.get(key)||null,setItem:(key,value)=>session.set(key,value),removeItem:key=>session.delete(key)},location:{origin:'https://counter.test'},navigator:{},crypto,Response,Request,URL,FormData:FakeFormData,Intl,JSON,Number,Array,String,Math,Date,console,AbortController,AbortSignal:{},setTimeout:(fn,ms)=>ms===7000?0:setTimeout(fn,ms),clearTimeout,setInterval:(fn,ms)=>{intervals.set(ms,fn);return ms},confirm:()=>true,prompt:(_,value)=>value??'',fetch:(path,options={})=>worker.fetch(new Request('https://counter.test'+path,{method:options.method||'GET',headers:{Origin:'https://counter.test',...options.headers},body:options.body}),env)};
  context.window=context;
@@ -27,7 +28,10 @@ test('Android 11 cashier creates a product and customer, opens hardware settings
  await new Promise(resolve=>setTimeout(resolve,10));
  await listeners.submit({target:{id:'login',password:{value:env.POS_STAFF_PASSWORD},username:{value:'huang'}},preventDefault(){}});
  assert.match(app.innerHTML,/Giỏ món/);
+ nav.scrollLeft=520;nav.scrollTop=33;
  await click({screen:'products'});
+ assert.equal(nav.scrollLeft,520,'Bottom menu keeps its horizontal position after render');
+ assert.equal(nav.scrollTop,33,'Side menu keeps its vertical position after render');
  assert.ok(app.innerHTML.indexOf('id="product-form"')<app.innerHTML.indexOf('class="poc-table"'),'Android editor must be above the long product table');
  await click({action:'product-new'});
  await submit('product-form',{id:'ANDROID11',sku:'ANDROID11',name:'Món thử Android',nameCn:'安卓测试',category:'Đồ uống',station:'BAR',price:'18000',largePrice:'22000',icon:'🥤',size:true,spicy:false,active:true,recipe:''});
@@ -46,7 +50,31 @@ test('Android 11 cashier creates a product and customer, opens hardware settings
  assert.match(app.innerHTML,/Khách thử Android/);
  await click({screen:'new'});await new Promise(resolve=>setTimeout(resolve,500));
  assert.ok(calls.drafts.length>=1&&calls.drafts.length<=2,`Expected one debounced native draft, got ${calls.drafts.length}`);
+ await click({add:'EC_BLEND001'});
+ assert.match(app.innerHTML,/role="dialog"/,'Actual Echo mango product opens the chooser');
+ await click({itemSave:''});
+ assert.match(app.innerHTML,/Giỏ món \(1\)/);
+ await click({cartRemove:'0'});
+ await click({add:'EC_BLEND001'});
+ await click({action:'focus-scanner'});
+ assert.ok(scanner.scrolled&&scanner.focused,'Scanner scrolls into view and focuses even after a pending chooser');
+ assert.doesNotMatch(app.innerHTML,/role="dialog"/);
+ for(let i=0;i<20;i++){
+  await click({add:'EC_BLEND001'});
+  listeners.keydown({key:'Escape',target:{id:''},preventDefault(){}});
+ }
+ assert.doesNotMatch(app.innerHTML,/role="dialog"/,'Repeated open/cancel does not leave a blocking draft');
+ await click({add:'EC_BLEND001'});
+ assert.equal(context.LotusCounterBack(),true,'Android Back dismisses the chooser');
+ assert.equal(context.LotusCounterBack(),false,'Next Back can return to Android');
  await click({add:'101'});
+ assert.match(app.innerHTML,/role="dialog"/,'Counter opens an in-page item chooser, not a suppressed WebView prompt');
+ await click({screen:'customers'});
+ assert.match(app.innerHTML,/Khách thử Android/,'Navigation can recover from a pending item chooser');
+ await click({screen:'new'});
+ await click({add:'101'});
+ await click({itemSave:''});
+ await click({itemSave:''});
  assert.match(app.innerHTML,/class="counter-grid"/);
  assert.match(app.innerHTML,/class="card-sticky"/);
  assert.match(app.innerHTML,/Giỏ món \(1\)/);
@@ -79,5 +107,10 @@ test('Android 11 cashier creates a product and customer, opens hardware settings
  await remote('/api/staff/customers','POST',{name:'Khách từ quầy khác',phone:'0912345679'});
  await intervals.get(10000)();
  assert.match(app.innerHTML,/Khách từ quầy khác/,'Customer changes from another POS must appear without reopening the screen');
+ await click({screen:'shifts'});await new Promise(resolve=>setTimeout(resolve,200));
+ const workDate=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Ho_Chi_Minh',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+ await remote('/api/staff/schedules','POST',{staffId:'OWNER',workDate,startTime:'19:13',endTime:'20:17',note:'REMOTE-ROSTER-AUDIT'});
+ await intervals.get(10000)();
+ assert.match(app.innerHTML,/REMOTE-ROSTER-AUDIT/,'An open roster updates after another terminal assigns a shift');
  db.close();
 });

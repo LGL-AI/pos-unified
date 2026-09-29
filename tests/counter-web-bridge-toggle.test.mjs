@@ -12,7 +12,7 @@ test('web counter Bridge OFF still saves payments to D1 but never prints; ON ski
  const DB={prepare(sql){let args=[];return{bind(...values){args=values;return this},async first(){return db.prepare(sql).get(...args)||null},async all(){return{results:db.prepare(sql).all(...args)}},async run(){return{meta:{changes:db.prepare(sql).run(...args).changes}}},_run(){return db.prepare(sql).run(...args)}}},async batch(queries){db.exec('BEGIN');try{const results=queries.map(query=>query._run());db.exec('COMMIT');return results}catch(error){db.exec('ROLLBACK');throw error}}};
  const env={DB,ORDERING_ENABLED:'true',SESSION_SECRET:'bridge-web-test-secret-1234567890123456',POS_STAFF_PASSWORD:'bridge-test-password'};
  const storage=new Map([['lotus-cloud:counter-bridge-enabled','false']]);
- const sent=[];
+ const sent=[];let failKitchen=false;
  function openWeb(native=false){
   const app={innerHTML:'',querySelector:()=>null,querySelectorAll:()=>[]};
   const connection={textContent:'',classList:{toggle(){}}},listeners={},intervals=new Map(),banners=[];
@@ -21,7 +21,7 @@ test('web counter Bridge OFF still saves payments to D1 but never prints; ON ski
   const context={document,location:{origin:'https://bridge.test',reload(){reloads++}},localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},sessionStorage:{getItem:()=>null,setItem(){},removeItem(){}},crypto,Response,Request,URL,Intl,JSON,Number,Array,String,Math,Date,console,AbortSignal,setTimeout:(fn,ms)=>ms>=7000?0:setTimeout(fn,ms),clearTimeout,setInterval:(fn,ms)=>{intervals.set(ms,fn);return ms},confirm:()=>true,prompt:(_text,value)=>value??'',fetch:(path,options={})=>worker.fetch(new Request('https://bridge.test'+path,{method:options.method||'GET',headers:{Origin:'https://bridge.test',...options.headers},body:options.body}),env)};
   context.window=context;
   context.LotusPrintCodes={barcode:()=>({toDataURL:()=>''}),qr:()=>({toDataURL:()=>''})};
-  context.LotusCounterDevices={token:()=> 'paired',status:async()=>({kitchenIp:'192.168.1.130',labelMethod:'USB',labelPrinter:'XP-365B',labelWidth:50,labelHeight:30}),send:async job=>{sent.push(job);return{ok:true,state:'SENT'}},receipt:()=>({width:8,height:8,bitmap:''}),kitchen:()=>({width:8,height:8,bitmap:''}),labels:()=>[{width:8,height:8,bitmap:''}]};
+  context.LotusCounterDevices={token:()=> 'paired',status:async()=>({kitchenIp:'192.168.1.130',labelMethod:'USB',labelPrinter:'XP-365B',labelWidth:50,labelHeight:30}),send:async job=>{sent.push(job);if(failKitchen&&job.type==='KITCHEN')throw Error('printer disconnected');return{ok:true,state:'SENT'}},receipt:()=>({width:8,height:8,bitmap:''}),kitchen:()=>({width:8,height:8,bitmap:''}),labels:()=>[{width:8,height:8,bitmap:''}]};
   if(native)context.LotusNative={displaySession(){},getDisplays:()=> '[]',openSettings(){},paymentRecorded(){},displayDraft(){},syncPaidJob(){}};
   vm.createContext(context);
   vm.runInContext(readFileSync(new URL('../public/staff/staff.js',import.meta.url),'utf8'),context);
@@ -32,7 +32,7 @@ test('web counter Bridge OFF still saves payments to D1 but never prints; ON ski
  assert.match(off.app.innerHTML,/Bridge máy in POS web/);
  assert.match(off.app.innerHTML,/OFF · demo, không in/);
  assert.equal(off.banners.length,1);
- await off.click({screen:'new'});await off.click({add:'101'});await off.click({action:'submit'});
+ await off.click({screen:'new'});await off.click({add:'101'});await off.click({itemSave:''});await off.click({action:'submit'});
  const first=db.prepare("SELECT id FROM qr_orders WHERE source='POS' ORDER BY created_at DESC LIMIT 1").get();assert.ok(first);
  await off.click({pay:first.id,method:'CASH'});
  assert.equal(db.prepare('SELECT payment_status FROM qr_orders WHERE id=?').get(first.id).payment_status,'PAID');
@@ -45,10 +45,22 @@ test('web counter Bridge OFF still saves payments to D1 but never prints; ON ski
  const on=openWeb();await new Promise(resolve=>setTimeout(resolve,10));
  await on.click({screen:'settings'});assert.match(on.app.innerHTML,/ON · in theo quy trình/);
  await on.intervals.get(12000)();assert.equal(sent.length,0,'Old paid jobs are not printed when Bridge is re-enabled');
- await on.click({screen:'new'});await on.click({add:'101'});await on.click({action:'submit'});
+ await on.click({screen:'new'});await on.click({add:'101'});await on.click({itemSave:''});await on.click({action:'submit'});
  const second=db.prepare("SELECT id FROM qr_orders WHERE source='POS' ORDER BY created_at DESC LIMIT 1").get();assert.notEqual(second.id,first.id);
  await on.click({pay:second.id,method:'CASH'});
- assert.deepEqual(sent.map(job=>job.type),['DRAWER','RECEIPT','KITCHEN','LABEL']);
+ assert.deepEqual(sent.map(job=>job.type),['DRAWER','LABEL','KITCHEN','RECEIPT']);
+ await on.click({screen:'new'});await on.click({add:'101'});await on.click({itemSave:''});await on.click({action:'submit'});
+ const third=db.prepare("SELECT id FROM qr_orders WHERE source='POS' ORDER BY rowid DESC LIMIT 1").get();
+ const job3=db.prepare('SELECT id FROM pos_kitchen_jobs WHERE order_id=?').get(third.id);
+ assert.equal(job3,undefined,'No kitchen job before payment');
+ // An ambiguous printer write must stop the following receipt, not payment.
+ const sendBefore=sent.length;
+ failKitchen=true;
+ await on.click({pay:third.id,method:'CASH'});
+ assert.equal(db.prepare('SELECT payment_status FROM qr_orders WHERE id=?').get(third.id).payment_status,'PAID');
+ assert.equal(db.prepare('SELECT status FROM pos_kitchen_jobs WHERE order_id=?').get(third.id).status,'UNKNOWN');
+ assert.equal(sent.slice(sendBefore).some(j=>j.type==='RECEIPT'),false,'Unknown kitchen state must not emit a receipt');
+ failKitchen=false;
  storage.set('lotus-cloud:counter-bridge-enabled','false');
  const android=openWeb(true);await new Promise(resolve=>setTimeout(resolve,10));
  await android.click({screen:'settings'});
